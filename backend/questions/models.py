@@ -18,7 +18,7 @@ class Subject(models.Model):
         return self.name
 
 
-class TopicGroup(models.Model):
+class Category(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField()
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
@@ -30,33 +30,40 @@ class TopicGroup(models.Model):
 class Topic(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField()
-    topic_group = models.ForeignKey(TopicGroup, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
 
 
-class Question(models.Model):
-    question_text = models.CharField(max_length=200)
-    topic = models.ForeignKey(Topic, on_delete=models.CASCADE)
+class AbstractQuestion(models.Model):
+    topics = models.ManyToManyField(Topic)
+    question_text = models.TextField()
+    solution_description = models.TextField()
+    marks = models.IntegerField()
+    time_limit = models.DurationField()
 
-    class Difficulty(models.TextChoices):
-        EASY = 'easy'
-        MEDIUM = 'medium'
-        HARD = 'hard'
-
-    difficulty = models.CharField(
-        max_length=6,
-        choices=Difficulty.choices,
-        default=Difficulty.EASY
-    )
+    class Meta:
+        abstract = True
 
     def __str__(self):
         return self.question_text
 
 
+class MultiChoiceQuestion(AbstractQuestion):
+    pass
+
+
+class TextQuestion(AbstractQuestion):
+    solution_text = models.TextField()
+
+
+class NumericalQuestion(AbstractQuestion):
+    solution_value = models.DecimalField(max_digits=30, decimal_places=8)
+
+
 class Choice(models.Model):
-    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    multi_choice_question = models.ForeignKey(MultiChoiceQuestion, on_delete=models.CASCADE)
     choice_text = models.CharField(max_length=200)
     is_correct = models.BooleanField(default=False)
 
