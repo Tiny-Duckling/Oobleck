@@ -6,9 +6,9 @@ Next Tasks:
 # Profiles
 - Registration / Login / Logout / Change Password etc.
 - Admin can add / edit / delete users, groups, subjects
-- Subject experts can add / edit / delete topic groups, topics, questions
+- Subject experts can add / edit / delete categories, topics, questions
 - Users can create groups, exams
-- Users can propose subjects, topic groups, topics, questions, question bugs. If Admins / subject experts approve their propposal, they will get credits. Admins will approve subjects, subject experts will approve others.
+- Users can propose subjects, categories, topics, questions, question bugs. If Admins / subject experts approve their propposal, they will get credits.
 - Users can apply to become subject experts
 
 # Credit Management
@@ -24,15 +24,23 @@ Users can
 
 # Questions
 Questions are mostly immutable. [Note to self: think of the ways you can make it completely immutable]
+- There will be 6000 unique questions for each subject
 - For an update, previous question will be copied to new question with the updated fields and a leader field in old question will refer to the new question, following DSU algorithm.
 - For a delete, soft delete the question.
+- There will be translations of questions in several languages
 
-Users with subject expertise (e.g. Physics teacher, math teacher etc.) can
-- Add / Update / Delete Questions on that subject
+Users with subject expertise can
+- search questions or filter using subject / categories / topics.
+- approve / reject questions that is **NOT** made by himself/herself on that subject
+
+Admins can
+- approve / reject subject proposals
 
 # Exams
-- Users can create exams for themselves by selecting one/more subjects, topic groups, topics, difficulty
-- Users can create exams for other users / groups and pay credits upfront. Exam creator may not need to pay the full amount upfront. Credits will be stored for that particular exam. 
+- There are two types of exams: private and public.
+- For private exams, exam creator needs to assign users / user groups for that exam. Credits will be deducted while assigning.
+- For public exams, a public link will be created where users can take the exam by spending their own credits.
+- Or, maybe an option to choose who will pay. Exam creator, or exam taker?
 
 # Payment
 - Bkash
