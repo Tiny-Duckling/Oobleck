@@ -1,5 +1,7 @@
 django
+django-environ
 djangorestframework
 dj-rest-auth
-dj-rest-auth[with_social]
 djangorestframework-simplejwt
+django-parler-rest
+Pillow

@@ -1,10 +1,6 @@
-Next Tasks:
-1. Fix questions
-2. Learn all about permissions, difference between auth_group_permissions and profiles_user_user_permissions
-3. Add superuser(done), admin, subject experts.
-
 # Profiles
-- Registration / Login / Logout / Change Password etc.
+- Registration / Login / Logout / Change Password etc using **dj-rest-auth**.
+- Using **rest-framework-roles** to manage permissions
 - Admin can add / edit / delete users, groups, subjects
 - Subject experts can add / edit / delete categories, topics, questions
 - Users can create groups, exams
@@ -23,11 +19,11 @@ Users can
 - Credit history will store all credit related operations
 
 # Questions
-Questions are mostly immutable. [Note to self: think of the ways you can make it completely immutable]
+- enable versioning in questions. maybe use **django-revisions**. Possible frameworks: django-simpe-history, django-reversion
 - There will be 6000 unique questions for each subject
 - For an update, previous question will be copied to new question with the updated fields and a leader field in old question will refer to the new question, following DSU algorithm.
 - For a delete, soft delete the question.
-- There will be translations of questions in several languages
+- There will be translations of questions in several languages. maybe use **django-parler-rest**. Possible other frameworks: django-hvad, django-modeltrans, django-modeltranslation.
 
 Users with subject expertise can
 - search questions or filter using subject / categories / topics.
@@ -51,3 +47,7 @@ Admins can
 - Bank Transfer
 - Paypal
 - Stripe
+
+# Miscellaneous
+- Add time zones
+- Add languages
