@@ -23,4 +23,5 @@ urlpatterns = [
     path('', include('dj_rest_auth.urls')),
     path('register/account-confirm-email/<str:key>/', ConfirmEmailView.as_view()),
     path('register/', include('dj_rest_auth.registration.urls')),
+    path('applications/', include('applications.urls')),
 ]
