@@ -3,5 +3,5 @@ django-environ
 djangorestframework
 dj-rest-auth
 djangorestframework-simplejwt
-django-parler-rest
 Pillow
+django-extensions

@@ -49,13 +49,15 @@ INSTALLED_APPS = [
 
     'profiles',
     'questions',
-    'applications',
+    'jobs',
 
     'allauth',
     'allauth.account',
 
     'dj_rest_auth',
     'dj_rest_auth.registration',
+
+    'django_extensions',
 ]
 
 SITE_ID = 1

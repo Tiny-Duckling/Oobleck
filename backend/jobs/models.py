@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy
 from django.conf import settings
 
 
-class ApplicationRequest(models.Model):
+class Opening(models.Model):
     job_title = models.CharField(max_length=100)
     vacancies = models.IntegerField()
     responsibilities = models.TextField()
@@ -31,4 +31,12 @@ class ApplicationRequest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class Application(models.Model):
+    opening = models.ForeignKey(Opening, on_delete=models.PROTECT)
 
+    verdict = models.TextChoices('Verdict', 'Accepted Rejected')
+
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
