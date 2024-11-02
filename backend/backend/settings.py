@@ -36,6 +36,19 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'profiles',
+    'questions',
+    'jobs',
+
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
+
+    'rest_framework',
+    'rest_framework.authtoken',
+
+    'allauth',
+    'allauth.account',
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -43,21 +56,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
-
-    'rest_framework',
-    'rest_framework.authtoken',
-
-    'profiles',
-    'questions',
-    'jobs',
-
-    'allauth',
-    'allauth.account',
-
-    'dj_rest_auth',
-    'dj_rest_auth.registration',
-
-    'django_extensions',
 ]
 
 SITE_ID = 1
@@ -176,5 +174,5 @@ ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
 ACCOUNT_LOGOUT_ON_PASSWORD_CHANGE = True
 ACCOUNT_REAUTHENTICATION_REQUIRED = True
 
-LOGIN_REDIRECT_URL = '/profile/'
+LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/login/'

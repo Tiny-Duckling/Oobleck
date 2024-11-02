@@ -4,7 +4,17 @@ from django.utils.translation import gettext_lazy
 from django.conf import settings
 
 
-class Opening(models.Model):
+class AbstractModel(models.Model):
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class Opening(AbstractModel):
     job_title = models.CharField(max_length=100)
     vacancies = models.IntegerField()
     responsibilities = models.TextField()
@@ -25,18 +35,11 @@ class Opening(models.Model):
     preferred_qualifications = models.TextField()
     deadline = models.DateField()
 
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
-    updated_at = models.DateTimeField(auto_now=True)
 
-
-class Application(models.Model):
+class Application(AbstractModel):
     opening = models.ForeignKey(Opening, on_delete=models.PROTECT)
+    resume = models.FileField(null=True, blank=True)
 
-    verdict = models.TextChoices('Verdict', 'Accepted Rejected')
+    Verdict = models.TextChoices('Verdict', 'ACCEPTED REJECTED')
+    verdict = models.CharField(max_length=10, choices=Verdict.choices, null=True, blank=True)
 
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
-    updated_at = models.DateTimeField(auto_now=True)

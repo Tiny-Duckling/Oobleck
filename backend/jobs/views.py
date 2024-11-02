@@ -1,15 +1,20 @@
+from django.utils import timezone
 from rest_framework import viewsets
 
 from .mixins import AutoUserMixin
-from .models import Opening
-from .serializers import OpeningSerializer
-
-from backend.permissions import IsStaffOrReadOnly
+from .models import Opening, Application
+from .permissions import IsStaffOrReadOnly
+from .serializers import OpeningSerializer, ApplicationSerializer
 
 
 class OpeningViewSet(AutoUserMixin, viewsets.ModelViewSet):
-    queryset = Opening.objects.filter(Q(date=now.date(),time__gte=now.time()|Q(date__gt=now.date())).order_by('-date')
+    queryset = Opening.objects.filter(deadline__gte=timezone.now())
     serializer_class = OpeningSerializer
     permission_classes = [IsStaffOrReadOnly]
 
+
+class ApplicationViewSet(AutoUserMixin, viewsets.ModelViewSet):
+    queryset = Application.objects.all()
+    serializer_class = ApplicationSerializer
+    permission_classes = [IsStaffOrReadOnly]
 
