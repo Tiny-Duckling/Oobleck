@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy
 from django.conf import settings
 
 
-class AbstractModel(models.Model):
+class CreateUpdateModel(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
@@ -14,7 +14,15 @@ class AbstractModel(models.Model):
         abstract = True
 
 
-class Opening(AbstractModel):
+class CreateModel(models.Model):
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        abstract = True
+
+
+class Opening(CreateUpdateModel):
     job_title = models.CharField(max_length=100)
     vacancies = models.IntegerField()
     responsibilities = models.TextField()
@@ -35,11 +43,17 @@ class Opening(AbstractModel):
     preferred_qualifications = models.TextField()
     deadline = models.DateField()
 
+    def __str__(self):
+        return self.job_title
 
-class Application(AbstractModel):
+
+class Application(CreateModel):
     opening = models.ForeignKey(Opening, on_delete=models.PROTECT)
     resume = models.FileField(null=True, blank=True)
 
+
+class ApplicationVerdict(CreateUpdateModel):
+    application = models.ForeignKey(Application, on_delete=models.PROTECT)
     Verdict = models.TextChoices('Verdict', 'ACCEPTED REJECTED')
     verdict = models.CharField(max_length=10, choices=Verdict.choices, null=True, blank=True)
 

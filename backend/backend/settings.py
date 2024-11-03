@@ -34,11 +34,12 @@ ALLOWED_HOSTS = []
 
 
 # Application definition
-
 INSTALLED_APPS = [
     'profiles',
     'questions',
     'jobs',
+    'exams',
+    'answers',
 
     'dj_rest_auth',
     'dj_rest_auth.registration',

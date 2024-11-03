@@ -6,34 +6,34 @@ from .models import Level, Subject, Category, Topic, Question, Choice
 class LevelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Level
-        fields = ('id', 'name', 'description')
+        fields = '__all__'
 
 
 class SubjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subject
-        fields = ('id', 'name', 'description', 'level')
+        fields = '__all__'
 
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ('id', 'name', 'description', 'subject', 'topic')
+        fields = '__all__'
 
 
 class TopicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Topic
-        fields = ('id', 'name', 'description', 'subject')
+        fields = '__all__'
 
 
 class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
-        fields = ('id', 'question_text', 'topic')
+        fields = '__all__'
 
 
 class ChoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Choice
-        fields = ('id', 'questions', 'choice_text', 'is_correct')
+        fields = '__all__'
