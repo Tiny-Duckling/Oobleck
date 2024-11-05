@@ -1,7 +1,12 @@
 from rest_framework import viewsets
 
 from .models import Level, Subject, Category, Topic
-from .serializers import LevelSerializer, SubjectSerializer, CategorySerializer, TopicSerializer
+from .serializers import (
+    LevelSerializer,
+    SubjectSerializer,
+    CategorySerializer,
+    TopicSerializer,
+)
 from .permissions import IsStaffOrReadOnly
 
 

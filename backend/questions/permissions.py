@@ -8,5 +8,7 @@ class IsStaffOrReadOnly(permissions.BasePermission):
 
         return request.user.is_staff
 
+
 class IsSubjectTutor(permissions.BasePermission):
     def has_permission(self, request, view):
+        return False
