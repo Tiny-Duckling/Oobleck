@@ -1,13 +1,3 @@
-# Study Notes
-1. Project structure: https://forum.djangoproject.com/t/structuring-large-complex-django-projects-and-using-a-services-layer-in-django-projects/1487
-2. Server: Gnuicorn
-3. Asynchronous things: Celery with RabbitMQ / Redis
-4. Python Decorators
-5. Domain Driven Design: https://phalt.github.io/django-api-domains/
-6. Styleguides: https://github.com/HackSoftware/Django-Styleguide, https://github.com/linnify/drf-styleguide
-7. Using black formatter
-
-
 # Miscellaneous
 - Add time zones
 - Add languages
