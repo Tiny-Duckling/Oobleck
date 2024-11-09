@@ -6,19 +6,14 @@ from .serializers import (
     SubjectSerializer,
     CategorySerializer,
     TopicSerializer,
+    QuestionGroupSerializer,
 )
-from .permissions import IsStaffOrReadOnly
+from .permissions import IsStaffOrReadOnly, IsTeacherOfSubject
 
 
 class LevelViewSet(viewsets.ModelViewSet):
     queryset = Level.objects.all()
     serializer_class = LevelSerializer
-    permission_classes = [IsStaffOrReadOnly]
-
-
-class SubjectViewSet(viewsets.ModelViewSet):
-    queryset = Subject.objects.all()
-    serializer_class = SubjectSerializer
     permission_classes = [IsStaffOrReadOnly]
 
 
@@ -28,13 +23,19 @@ class CategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [IsStaffOrReadOnly]
 
 
+class SubjectViewSet(viewsets.ModelViewSet):
+    queryset = Subject.objects.all()
+    serializer_class = SubjectSerializer
+    permission_classes = [IsStaffOrReadOnly]
+
+
 class TopicViewSet(viewsets.ModelViewSet):
     queryset = Topic.objects.all()
     serializer_class = TopicSerializer
-    permission_classes = [IsStaffOrReadOnly]
+    permission_classes = [IsTeacherOfSubject]
 
 
-class QuestionViewSet(viewsets.ModelViewSet):
+class QuestionGroupViewSet(viewsets.ModelViewSet):
     queryset = Level.objects.all()
-    serializer_class = LevelSerializer
-    permission_classes = [IsStaffOrReadOnly]
+    serializer_class = QuestionGroupSerializer
+    permission_classes = [IsTeacherOfSubject]

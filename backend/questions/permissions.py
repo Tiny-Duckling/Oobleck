@@ -9,6 +9,16 @@ class IsStaffOrReadOnly(permissions.BasePermission):
         return request.user.is_staff
 
 
-class IsSubjectTutor(permissions.BasePermission):
+class IsTeacherOfSubject(permissions.BasePermission):
     def has_permission(self, request, view):
-        return False
+        print("has_permission---------------")
+        print(request.data)
+        print(view)
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        print("has_object_permission---------------")
+        print(request.data)
+        print(view)
+        print(obj)
+        return True

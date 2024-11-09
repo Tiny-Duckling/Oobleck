@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Level, Subject, Category, Topic, Question, Choice
+from .models import Level, Subject, Category, Topic, Question, Choice, QuestionGroup
 
 
 class LevelSerializer(serializers.ModelSerializer):
@@ -24,6 +24,12 @@ class CategorySerializer(serializers.ModelSerializer):
 class TopicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Topic
+        fields = "__all__"
+
+
+class QuestionGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuestionGroup
         fields = "__all__"
 
 
