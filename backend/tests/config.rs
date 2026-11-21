@@ -1,7 +1,7 @@
 //! Integration tests for CORS origin parsing/validation.
 //!
 //! Lives in the separate `tests/` folder (integration tests, not inline unit
-//! tests), exercising the public API of the `quiz_backend` library crate.
+//! tests), exercising the public API of the `oobleck_backend` library crate.
 
 use oobleck_backend::config::parse_origin;
 

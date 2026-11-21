@@ -6,4 +6,4 @@ seed
 seed_gre
 
 echo "starting API on port ${PORT:-4000}..."
-exec quiz-backend
+exec oobleck-backend

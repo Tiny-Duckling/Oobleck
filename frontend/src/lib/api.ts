@@ -51,9 +51,13 @@ export interface Attempt {
 	id: string;
 	quiz_id: string;
 	quiz_title: string;
-	score: number;
-	total_questions: number;
-	submitted_at: string;
+	/** null while the attempt has not been submitted */
+	score: number | null;
+	total_questions: number | null;
+	/** null while the attempt has not been submitted */
+	submitted_at: string | null;
+	/** when the quiz was opened */
+	started_at: string;
 }
 
 /** One reviewed answer of a past attempt (option texts included server-side). */
@@ -123,11 +127,18 @@ export const api = {
 	submitQuiz: (
 		quizId: string,
 		answers: { question_id: string; selected_option_id: string }[],
-		token: string
+		token: string,
+		attemptId?: string | null
 	) =>
 		request<SubmitResponse>(`/api/quizzes/${quizId}/submit`, {
 			method: 'POST',
-			body: { answers },
+			body: attemptId ? { answers, attempt_id: attemptId } : { answers },
+			token
+		}),
+
+	startQuizAttempt: (quizId: string, token: string) =>
+		request<{ attempt_id: string }>(`/api/quizzes/${quizId}/attempt`, {
+			method: 'POST',
 			token
 		}),
 

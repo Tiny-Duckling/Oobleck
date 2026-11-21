@@ -69,11 +69,16 @@
 	<p><a href="/history">Back to my history</a></p>
 {:else if attempt}
 	<h1>{attempt.quiz_title}</h1>
-	<p class="meta">
-		Score: <strong>{attempt.score}</strong> / {attempt.total_questions}
-		({Math.round((attempt.score / attempt.total_questions) * 100)}%) ·
-		{new Date(attempt.submitted_at).toLocaleString()}
-	</p>
+	{#if attempt.score === null}
+		<p class="meta">Not submitted yet · started {new Date(attempt.started_at).toLocaleString()}</p>
+		<p class="meta">This attempt has no answers recorded. Resume the quiz to submit it.</p>
+	{:else}
+		<p class="meta">
+			Score: <strong>{attempt.score}</strong> / {attempt.total_questions}
+			({Math.round((attempt.score / (attempt.total_questions ?? 1)) * 100)}%) ·
+			{new Date(attempt.submitted_at ?? attempt.started_at).toLocaleString()}
+		</p>
+	{/if}
 	<AttemptReview {items} />
 	<p><a href="/history">Back to my history</a> · <a href="/">Back to quizzes</a></p>
 {/if}

@@ -13,9 +13,13 @@ pub struct AttemptDto {
     pub id: Uuid,
     pub quiz_id: Uuid,
     pub quiz_title: String,
-    pub score: i32,
-    pub total_questions: i32,
-    pub submitted_at: DateTime<Utc>,
+    /// `None` while the attempt has not been submitted.
+    pub score: Option<i32>,
+    pub total_questions: Option<i32>,
+    /// `None` while the attempt has not been submitted.
+    pub submitted_at: Option<DateTime<Utc>>,
+    /// When the quiz was opened (also the submit time for legacy attempts).
+    pub started_at: DateTime<Utc>,
 }
 
 /// One reviewed answer of a past attempt. Option texts are included so the
@@ -39,9 +43,12 @@ pub struct AttemptDetailDto {
     pub id: Uuid,
     pub quiz_id: Uuid,
     pub quiz_title: String,
-    pub score: i32,
-    pub total_questions: i32,
-    pub submitted_at: DateTime<Utc>,
+    /// `None` while the attempt has not been submitted.
+    pub score: Option<i32>,
+    pub total_questions: Option<i32>,
+    /// `None` while the attempt has not been submitted.
+    pub submitted_at: Option<DateTime<Utc>>,
+    pub started_at: DateTime<Utc>,
     pub results: Vec<AttemptAnswerDto>,
 }
 
@@ -54,11 +61,12 @@ pub async fn my_history(
 
     let history = sqlx::query_as::<_, AttemptDto>(
         r#"
-        SELECT a.id, a.quiz_id, q.title AS quiz_title, a.score, a.total_questions, a.submitted_at
+        SELECT a.id, a.quiz_id, q.title AS quiz_title, a.score, a.total_questions,
+               a.submitted_at, a.started_at
         FROM attempts a
         JOIN quizzes q ON q.id = a.quiz_id
         WHERE a.user_id = $1
-        ORDER BY a.submitted_at DESC
+        ORDER BY COALESCE(a.submitted_at, a.started_at) DESC
         "#,
     )
     .bind(user_id)
@@ -80,10 +88,20 @@ pub async fn get_attempt(
 
     // NotFound for both missing and foreign attempts so attempt ids aren't
     // enumerable across users.
-    let (quiz_id, quiz_title, score, total_questions, submitted_at) =
-        sqlx::query_as::<_, (Uuid, String, i32, i32, DateTime<Utc>)>(
+    let (quiz_id, quiz_title, score, total_questions, submitted_at, started_at) =
+        sqlx::query_as::<
+            _,
+            (
+                Uuid,
+                String,
+                Option<i32>,
+                Option<i32>,
+                Option<DateTime<Utc>>,
+                DateTime<Utc>,
+            ),
+        >(
             r#"
-            SELECT a.quiz_id, q.title, a.score, a.total_questions, a.submitted_at
+            SELECT a.quiz_id, q.title, a.score, a.total_questions, a.submitted_at, a.started_at
             FROM attempts a
             JOIN quizzes q ON q.id = a.quiz_id
             WHERE a.id = $1 AND a.user_id = $2
@@ -125,6 +143,7 @@ pub async fn get_attempt(
         score,
         total_questions,
         submitted_at,
+        started_at,
         results,
     }))
 }

@@ -13,6 +13,9 @@
 	let busy = $state(false);
 	// question_id -> selected option_id
 	let selections = $state<Record<string, string>>({});
+	// In-progress attempt created when the quiz was opened; null when starting
+	// one failed (submitting still works — the backend creates an attempt then).
+	let attemptId = $state<string | null>(null);
 
 	const quizId = $derived(page.params.id);
 
@@ -50,6 +53,12 @@
 
 		try {
 			quiz = await api.getQuiz(quizId ?? '', token);
+			// Record that the quiz was started so it shows up in history even
+			// if it is never submitted. Non-fatal on failure.
+			attemptId = await api
+				.startQuizAttempt(quiz.id, token)
+				.then((r) => r.attempt_id)
+				.catch(() => null);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'failed to load quiz';
 		} finally {
@@ -67,7 +76,7 @@
 			const answers = quiz.questions
 				.filter((q) => selections[q.id])
 				.map((q) => ({ question_id: q.id, selected_option_id: selections[q.id] }));
-			result = await api.submitQuiz(quiz.id, answers, auth.token);
+			result = await api.submitQuiz(quiz.id, answers, auth.token, attemptId);
 			window.scrollTo({ top: 0 });
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'failed to submit quiz';

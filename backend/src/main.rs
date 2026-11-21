@@ -23,7 +23,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "quiz_backend=debug,tower_http=info".into()),
+                .unwrap_or_else(|_| "oobleck_backend=debug,tower_http=info".into()),
         )
         .init();
 
@@ -57,6 +57,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/quizzes/{id}/submit",
             post(routes::quizzes::submit_quiz),
+        )
+        .route(
+            "/api/quizzes/{id}/attempt",
+            post(routes::quizzes::start_attempt),
         )
         .route("/api/me/history", get(routes::history::my_history))
         .route("/api/attempts/{id}", get(routes::history::get_attempt))

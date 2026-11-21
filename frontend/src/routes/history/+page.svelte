@@ -48,9 +48,21 @@
 			{#each attempts as attempt (attempt.id)}
 				<tr>
 					<td><a href="/quiz/{attempt.quiz_id}">{attempt.quiz_title}</a></td>
-					<td>{attempt.score} / {attempt.total_questions}</td>
-					<td>{new Date(attempt.submitted_at).toLocaleString()}</td>
-					<td><a href="/attempts/{attempt.id}">Review</a></td>
+					<td>
+						{#if attempt.score === null}
+							<span class="in-progress">In progress</span>
+						{:else}
+							{attempt.score} / {attempt.total_questions}
+						{/if}
+					</td>
+					<td>{new Date(attempt.submitted_at ?? attempt.started_at).toLocaleString()}</td>
+					<td>
+						{#if attempt.submitted_at === null}
+							<a href="/quiz/{attempt.quiz_id}">Resume</a>
+						{:else}
+							<a href="/attempts/{attempt.id}">Review</a>
+						{/if}
+					</td>
 				</tr>
 			{/each}
 		</tbody>
@@ -76,5 +88,9 @@
 	}
 	.error {
 		color: #dc2626;
+	}
+	.in-progress {
+		color: #b45309;
+		font-size: 0.9rem;
 	}
 </style>

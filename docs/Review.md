@@ -1,5 +1,7 @@
 # Codebase Review — Oobleck / Quiz Zoo
 
+> **Superseded:** see [`Review-2026-11-21.md`](./Review-2026-11-21.md) for the current review.
+
 Reviewed the full source tree (Rust/Axum backend, SvelteKit frontend, migrations, Docker setup) and ran the available checks:
 
 - `cargo clippy --all-targets` → compiles, **11 style warnings** (no errors)

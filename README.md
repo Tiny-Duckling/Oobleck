@@ -1,4 +1,4 @@
-# Quiz Zoo — Quiz-Taking Website
+# Oobleck — Quiz-Taking Website
 
 A full-stack quiz application: **Axum (Rust)** backend + **SvelteKit (Svelte 5)** frontend + **PostgreSQL**.
 
@@ -167,5 +167,5 @@ tracked files.
   https://github.com/Xatta-Trone/gregmatgrewordsdb.
 - Heads-up: `sqlx::migrate!` reads `migrations/` at compile time but cargo does
   not track that dependency. After adding a migration, `touch` the crate sources
-  (or `cargo clean -p quiz-backend`) before re-running a seed binary — the
+  (or `cargo clean -p oobleck-backend`) before re-running a seed binary — the
   Dockerfile already does this.

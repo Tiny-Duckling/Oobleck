@@ -43,6 +43,16 @@ pub struct QuizDetail {
 #[derive(Deserialize)]
 pub struct SubmitRequest {
     pub answers: Vec<AnswerSubmission>,
+    /// Optional id of the in-progress attempt created when the quiz was
+    /// opened. When absent, the user's unsubmitted attempt for this quiz is
+    /// submitted (if any) or a new attempt is created.
+    #[serde(default)]
+    pub attempt_id: Option<Uuid>,
+}
+
+#[derive(Serialize)]
+pub struct StartAttemptResponse {
+    pub attempt_id: Uuid,
 }
 
 #[derive(Deserialize)]
@@ -157,6 +167,67 @@ pub async fn get_quiz(
     }))
 }
 
+/// Create (or reuse) the caller's in-progress attempt for a quiz. Called when
+/// a quiz is opened so that history includes quizzes that are never submitted.
+pub async fn start_attempt(
+    State(state): State<AppState>,
+    AuthUser { user_id, .. }: AuthUser,
+    Path(quiz_id): Path<Uuid>,
+) -> AppResult<Json<StartAttemptResponse>> {
+    let user_id = Uuid::parse_str(&user_id)
+        .map_err(|_| AppError::Unauthorized("invalid token subject".into()))?;
+
+    let quiz_exists: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM quizzes WHERE id = $1")
+            .bind(quiz_id)
+            .fetch_optional(&state.db)
+            .await?;
+    if quiz_exists.is_none() {
+        return Err(AppError::NotFound("quiz not found".into()));
+    }
+
+    // Reuse the user's unsubmitted attempt for this quiz, if any, so repeated
+    // visits (or a second tab) don't create duplicate history entries.
+    if let Some(attempt_id) = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM attempts WHERE user_id = $1 AND quiz_id = $2 AND submitted_at IS NULL",
+    )
+    .bind(user_id)
+    .bind(quiz_id)
+    .fetch_optional(&state.db)
+    .await?
+    {
+        return Ok(Json(StartAttemptResponse { attempt_id }));
+    }
+
+    let attempt_id: Uuid =
+        match sqlx::query_scalar("INSERT INTO attempts (user_id, quiz_id) VALUES ($1, $2) RETURNING id")
+            .bind(user_id)
+            .bind(quiz_id)
+            .fetch_one(&state.db)
+            .await
+        {
+            Ok(id) => id,
+            // A concurrent request created the in-progress attempt first;
+            // reuse it (idx_attempts_one_in_progress).
+            Err(err)
+                if err
+                    .as_database_error()
+                    .is_some_and(|e| e.is_unique_violation()) =>
+            {
+                sqlx::query_scalar::<_, Uuid>(
+                    "SELECT id FROM attempts WHERE user_id = $1 AND quiz_id = $2 AND submitted_at IS NULL",
+                )
+                .bind(user_id)
+                .bind(quiz_id)
+                .fetch_one(&state.db)
+                .await?
+            }
+            Err(err) => return Err(err.into()),
+        };
+
+    Ok(Json(StartAttemptResponse { attempt_id }))
+}
+
 pub async fn submit_quiz(
     State(state): State<AppState>,
     AuthUser { user_id, .. }: AuthUser,
@@ -167,11 +238,18 @@ pub async fn submit_quiz(
         .map_err(|_| AppError::Unauthorized("invalid token subject".into()))?;
 
     // Load correct answers for this quiz (question_id -> correct option_id).
+    // LATERAL + LIMIT 1 keeps exactly one row per question even if bad data
+    // marks multiple options correct; attempt_answers is unique per question.
     let correct: Vec<(Uuid, Uuid)> = sqlx::query_as(
         r#"
         SELECT qs.id, o.id
         FROM questions qs
-        JOIN options o ON o.question_id = qs.id AND o.is_correct
+        JOIN LATERAL (
+            SELECT id FROM options
+            WHERE question_id = qs.id AND is_correct
+            ORDER BY position
+            LIMIT 1
+        ) o ON true
         WHERE qs.quiz_id = $1
         ORDER BY qs.position
         "#,
@@ -207,19 +285,85 @@ pub async fn submit_quiz(
 
     let mut tx = state.db.begin().await?;
 
-    let attempt_id: Uuid = sqlx::query_scalar(
-        r#"
-        INSERT INTO attempts (user_id, quiz_id, score, total_questions)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id
-        "#,
-    )
-    .bind(user_id)
-    .bind(quiz_id)
-    .bind(score)
-    .bind(total)
-    .fetch_one(&mut *tx)
-    .await?;
+    // Resolve and lock the attempt inside the transaction. The row lock makes
+    // concurrent submits serialize: the second one sees `submitted_at` set and
+    // returns 409 instead of inserting duplicate attempt_answers rows.
+    let existing_attempt_id: Option<Uuid> = if let Some(id) = body.attempt_id {
+        let (id, submitted) = sqlx::query_as::<_, (Uuid, bool)>(
+            r#"
+            SELECT id, submitted_at IS NOT NULL
+            FROM attempts
+            WHERE id = $1 AND user_id = $2 AND quiz_id = $3
+            FOR UPDATE
+            "#,
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(quiz_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("attempt not found".into()))?;
+
+        if submitted {
+            return Err(AppError::Conflict("attempt already submitted".into()));
+        }
+        Some(id)
+    } else {
+        // No explicit id: reuse the user's unsubmitted attempt for this quiz.
+        sqlx::query_scalar(
+            r#"
+            SELECT id FROM attempts
+            WHERE user_id = $1 AND quiz_id = $2 AND submitted_at IS NULL
+            FOR UPDATE
+            "#,
+        )
+        .bind(user_id)
+        .bind(quiz_id)
+        .fetch_optional(&mut *tx)
+        .await?
+    };
+
+    let attempt_id: Uuid = match existing_attempt_id {
+        Some(id) => {
+            // Submitting an attempt that was created when the quiz was opened.
+            // Old answer rows shouldn't exist, but clear them defensively.
+            sqlx::query("DELETE FROM attempt_answers WHERE attempt_id = $1")
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+            let updated = sqlx::query(
+                r#"
+                UPDATE attempts
+                SET score = $2, total_questions = $3, submitted_at = now()
+                WHERE id = $1 AND submitted_at IS NULL
+                "#,
+            )
+            .bind(id)
+            .bind(score)
+            .bind(total)
+            .execute(&mut *tx)
+            .await?;
+            if updated.rows_affected() == 0 {
+                return Err(AppError::Conflict("attempt already submitted".into()));
+            }
+            id
+        }
+        None => {
+            sqlx::query_scalar(
+                r#"
+                INSERT INTO attempts (user_id, quiz_id, score, total_questions, submitted_at)
+                VALUES ($1, $2, $3, $4, now())
+                RETURNING id
+                "#,
+            )
+            .bind(user_id)
+            .bind(quiz_id)
+            .bind(score)
+            .bind(total)
+            .fetch_one(&mut *tx)
+            .await?
+        }
+    };
 
     for r in &results {
         sqlx::query(
