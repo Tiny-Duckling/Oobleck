@@ -1,0 +1,14 @@
+# IDE / editor
+.idea/
+.vscode/
+.roo/
+
+# Rust
+backend/target/
+
+# Node (frontend/.gitignore covers the rest)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
