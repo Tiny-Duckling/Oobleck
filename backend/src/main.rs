@@ -50,7 +50,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_origin(config.cors_origins)
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+        // Cache preflight results in the browser for a day instead of
+        // re-running OPTIONS before every cross-origin request.
+        .max_age(std::time::Duration::from_secs(86_400));
 
     let app = Router::new()
         .route("/api/auth/register", post(routes::auth::register))

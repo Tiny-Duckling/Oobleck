@@ -12,6 +12,7 @@ services:
       interval: 3s
       timeout: 3s
       retries: 15
+    restart: unless-stopped
 
   backend:
     build: ./backend
@@ -25,6 +26,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
@@ -32,6 +34,7 @@ services:
       - "8080:80"
     depends_on:
       - backend
+    restart: unless-stopped
 
 volumes:
   pgdata:

@@ -21,6 +21,7 @@ dotenvy = "0.15"
 rand = "0.8"
 uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
+url = "2"
 
 [[bin]]
 name = "seed"

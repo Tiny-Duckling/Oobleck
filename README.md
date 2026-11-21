@@ -150,6 +150,9 @@ tracked files.
 
 - Backend CORS allows `localhost:5173` / `127.0.0.1:5173` (SvelteKit dev server);
   in Docker the frontend is same-origin via the nginx proxy, so CORS is bypassed.
+  `CORS_ORIGINS` entries are validated at startup (must be `scheme://host[:port]`)
+  and normalized to the exact form browsers send — a typo fails startup instead
+  of silently never matching. Preflight responses are cached for 24h.
 - JWTs are stored in `localStorage` under the `quiz_auth` key and sent as
   `Authorization: Bearer <token>`.
 - Grading is fully server-side: the quiz-fetch endpoint never selects `is_correct`.
