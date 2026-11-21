@@ -1,8 +1,8 @@
 [package]
-name = "quiz-backend"
+name = "oobleck-backend"
 version = "0.1.0"
 edition = "2021"
-default-run = "quiz-backend"
+default-run = "oobleck-backend"
 
 [dependencies]
 axum = "0.8"

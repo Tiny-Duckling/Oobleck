@@ -1,16 +1,14 @@
 use axum::http::{header, Method};
 use axum::routing::{get, post};
 use axum::Router;
-use quiz_backend::config::{AppState, Config};
-use quiz_backend::routes;
+use oobleck_backend::config::{AppState, Config};
+use oobleck_backend::routes;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() {
-    // Handle errors manually so exit messages use the friendly Display
-    // formatting of our error types (Termination would print Debug).
     if let Err(e) = run().await {
         eprintln!("error: {e}");
         std::process::exit(1);

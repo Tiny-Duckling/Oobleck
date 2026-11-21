@@ -3,7 +3,7 @@
 //! Lives in the separate `tests/` folder (integration tests, not inline unit
 //! tests), exercising the public API of the `quiz_backend` library crate.
 
-use quiz_backend::config::parse_origin;
+use oobleck_backend::config::parse_origin;
 
 fn origin(raw: &str) -> String {
     parse_origin(raw).unwrap().to_str().unwrap().to_string()
@@ -29,7 +29,10 @@ fn drops_default_ports() {
 #[test]
 fn keeps_non_default_ports() {
     assert_eq!(origin("http://localhost:3000"), "http://localhost:3000");
-    assert_eq!(origin("https://example.com:8443"), "https://example.com:8443");
+    assert_eq!(
+        origin("https://example.com:8443"),
+        "https://example.com:8443"
+    );
 }
 
 #[test]
