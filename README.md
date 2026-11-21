@@ -21,11 +21,13 @@ backend/            Axum API (Rust)
   migrations/       SQLx migrations (schema)
   data/             GregMat GRE vocabulary word list (used by seed_gre)
   src/
-    main.rs         server entrypoint, routes, CORS
+    lib.rs          library crate: modules exposed for tests/consumers
+    main.rs         server entrypoint (thin binary wiring the library)
     auth.rs         JWT creation/verification + AuthUser extractor
-    config.rs       shared AppState (DB pool + JWT secret)
+    config.rs       Config (env validation) + shared AppState
     error.rs       AppError -> HTTP responses
     routes/         auth, quizzes, history handlers
+  tests/            integration tests (config origin parsing, ...)
   src/bin/seed.rs   seed binary: loads 3 sample quizzes
   src/bin/seed_gre.rs  seed binary: loads 37 GRE vocabulary quizzes (~2,050 questions)
   data/gregmat_words.json  GregMat GRE word list (1,109 words: synonyms, definitions, examples)

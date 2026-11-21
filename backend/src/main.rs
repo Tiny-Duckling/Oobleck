@@ -1,16 +1,11 @@
-mod auth;
-mod config;
-mod error;
-mod routes;
-
 use axum::http::{header, Method};
 use axum::routing::{get, post};
 use axum::Router;
+use quiz_backend::config::{AppState, Config};
+use quiz_backend::routes;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-
-use crate::config::{AppState, Config};
 
 #[tokio::main]
 async fn main() {
