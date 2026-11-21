@@ -11,7 +11,7 @@ services:
     # Keep the API internal: nginx (frontend) proxies /api to it.
     ports: !override []
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-quizadmin}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-quizdevdb02}
+      DATABASE_URL: postgres://${POSTGRES_USER:?set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:?set POSTGRES_DB in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
 
   frontend:
