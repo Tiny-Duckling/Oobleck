@@ -2,10 +2,6 @@ use axum::http::HeaderValue;
 use sqlx::PgPool;
 use thiserror::Error;
 
-/// Placeholder JWT secret in `.env.example` / the old committed `.env`.
-/// Refused at startup so an example value never reaches production.
-const JWT_PLACEHOLDER: &str = "change-me-to-a-long-random-string";
-
 /// Configuration errors, surfaced with actionable messages at startup.
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -14,9 +10,6 @@ pub enum ConfigError {
 
     #[error("JWT_SECRET is too short ({0} chars, need >= 32). Generate one with: openssl rand -base64 48")]
     WeakJwtSecret(usize),
-
-    #[error("JWT_SECRET is still the example placeholder. Generate one with: openssl rand -base64 48")]
-    PlaceholderJwtSecret,
 
     #[error("invalid CORS origin {0:?}")]
     InvalidCorsOrigin(String),
@@ -50,9 +43,6 @@ impl Config {
 
         if jwt_secret.len() < 32 {
             return Err(ConfigError::WeakJwtSecret(jwt_secret.len()));
-        }
-        if jwt_secret == JWT_PLACEHOLDER {
-            return Err(ConfigError::PlaceholderJwtSecret);
         }
 
         let port = std::env::var("PORT")

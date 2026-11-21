@@ -77,8 +77,9 @@ cargo run                 # start API on http://localhost:4000
 ```
 
 The backend validates `JWT_SECRET` at startup: it must be at least 32
-characters and must not be the `.env.example` placeholder, or the process
-refuses to start.
+characters, or the process refuses to start. The `CHANGE_ME` placeholder in
+the `.env.example` templates is deliberately shorter than that, so copying a
+template without editing it fails validation.
 
 Migrations also run automatically on server startup.
 
