@@ -104,9 +104,8 @@ docker compose up --build      # frontend on http://localhost:8080, API on :4000
 ```
 
 Compose reads secrets from the root `.env` (auto-loaded) — none are hardcoded
-in the compose files, and every variable is required: if one is missing,
-Compose fails fast with an error. For production, layer the
-overrides (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`).
+in the compose file, and every variable is required: if one is missing,
+Compose fails fast with an error.
 
 > Note: the `postgres` image only sets `POSTGRES_PASSWORD` when the `pgdata`
 > volume is first created. To rotate the password later, run
