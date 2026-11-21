@@ -1,10 +1,32 @@
-use anyhow::{bail, Context, Result};
 use axum::http::HeaderValue;
 use sqlx::PgPool;
+use thiserror::Error;
 
 /// Placeholder JWT secret in `.env.example` / the old committed `.env`.
 /// Refused at startup so an example value never reaches production.
 const JWT_PLACEHOLDER: &str = "change-me-to-a-long-random-string";
+
+/// Configuration errors, surfaced with actionable messages at startup.
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("{0} is not set (copy backend/.env.example to backend/.env)")]
+    MissingEnv(&'static str),
+
+    #[error("JWT_SECRET is too short ({0} chars, need >= 32). Generate one with: openssl rand -base64 48")]
+    WeakJwtSecret(usize),
+
+    #[error("JWT_SECRET is still the example placeholder. Generate one with: openssl rand -base64 48")]
+    PlaceholderJwtSecret,
+
+    #[error("invalid CORS origin {0:?}")]
+    InvalidCorsOrigin(String),
+}
+
+impl ConfigError {
+    fn var(name: &'static str) -> Result<String, Self> {
+        std::env::var(name).map_err(|_| Self::MissingEnv(name))
+    }
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -22,24 +44,15 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self> {
-        let database_url = std::env::var("DATABASE_URL")
-            .context("DATABASE_URL is not set (copy backend/.env.example to backend/.env)")?;
-        let jwt_secret = std::env::var("JWT_SECRET")
-            .context("JWT_SECRET is not set (copy backend/.env.example to backend/.env)")?;
+    pub fn from_env() -> Result<Self, ConfigError> {
+        let database_url = ConfigError::var("DATABASE_URL")?;
+        let jwt_secret = ConfigError::var("JWT_SECRET")?;
 
         if jwt_secret.len() < 32 {
-            bail!(
-                "JWT_SECRET is too short ({} chars, need >= 32). \
-                 Generate one with: openssl rand -base64 48",
-                jwt_secret.len()
-            );
+            return Err(ConfigError::WeakJwtSecret(jwt_secret.len()));
         }
         if jwt_secret == JWT_PLACEHOLDER {
-            bail!(
-                "JWT_SECRET is still the example placeholder. \
-                 Generate one with: openssl rand -base64 48"
-            );
+            return Err(ConfigError::PlaceholderJwtSecret);
         }
 
         let port = std::env::var("PORT")
@@ -52,10 +65,8 @@ impl Config {
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .map(|s| {
-                HeaderValue::from_str(s).with_context(|| format!("invalid CORS origin {s:?}"))
-            })
-            .collect::<Result<Vec<_>>>()?;
+            .map(|s| HeaderValue::from_str(s).map_err(|_| ConfigError::InvalidCorsOrigin(s.to_string())))
+            .collect::<Result<Vec<_>, ConfigError>>()?;
 
         Ok(Self {
             database_url,

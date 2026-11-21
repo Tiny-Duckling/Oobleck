@@ -11,7 +11,11 @@ pub struct Claims {
     pub exp: i64,
 }
 
-pub fn create_token(user_id: &str, username: &str, secret: &str) -> anyhow::Result<String> {
+pub fn create_token(
+    user_id: &str,
+    username: &str,
+    secret: &str,
+) -> jsonwebtoken::errors::Result<String> {
     let claims = Claims {
         sub: user_id.to_string(),
         username: username.to_string(),

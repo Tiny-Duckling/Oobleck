@@ -13,7 +13,16 @@ use tower_http::trace::TraceLayer;
 use crate::config::{AppState, Config};
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
+    // Handle errors manually so exit messages use the friendly Display
+    // formatting of our error types (Termination would print Debug).
+    if let Err(e) = run().await {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     let config = Config::from_env()?;

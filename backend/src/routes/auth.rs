@@ -81,8 +81,7 @@ pub async fn register(
     .fetch_one(&state.db)
     .await?;
 
-    let token = create_token(&user_id, &body.username, &state.jwt_secret)
-        .map_err(|_| AppError::Internal("failed to create token".into()))?;
+    let token = create_token(&user_id, &body.username, &state.jwt_secret)?;
 
     Ok((
         StatusCode::CREATED,
@@ -113,8 +112,7 @@ pub async fn login(
         return Err(AppError::Unauthorized("invalid username or password".into()));
     }
 
-    let token = create_token(&user_id, &body.username, &state.jwt_secret)
-        .map_err(|_| AppError::Internal("failed to create token".into()))?;
+    let token = create_token(&user_id, &body.username, &state.jwt_secret)?;
 
     Ok(Json(AuthResponse {
         token,

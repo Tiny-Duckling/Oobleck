@@ -51,7 +51,7 @@ fn quizzes() -> Vec<SeedQuiz> {
 }
 
 /// Insert the subject if missing and return its id.
-async fn ensure_subject(pool: &PgPool, name: &str) -> anyhow::Result<Uuid> {
+async fn ensure_subject(pool: &PgPool, name: &str) -> Result<Uuid, Box<dyn std::error::Error>> {
     sqlx::query("INSERT INTO subjects (name) VALUES ($1) ON CONFLICT (name) DO NOTHING")
         .bind(name)
         .execute(pool)
@@ -64,10 +64,11 @@ async fn ensure_subject(pool: &PgPool, name: &str) -> anyhow::Result<Uuid> {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
-    let database_url = std::env::var("DATABASE_URL")?;
+    let database_url = std::env::var("DATABASE_URL")
+        .map_err(|_| "DATABASE_URL is not set (copy backend/.env.example to backend/.env)")?;
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
