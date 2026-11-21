@@ -13,4 +13,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-*.env
+# Secrets / environment files (templates are allowed)
+.env
+.env.*
+!.env.example

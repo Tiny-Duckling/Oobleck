@@ -52,10 +52,11 @@ frontend/          SvelteKit app (Svelte 5, TypeScript)
 
 ### 1. PostgreSQL
 
-Create a database and user (adjust as needed):
+Create a database and user (pick your own password; use the same one in
+`backend/.env` below):
 
 ```sql
-CREATE USER quizadmin WITH PASSWORD 'quizDev04';
+CREATE USER quizadmin WITH PASSWORD '<your-password>';
 CREATE DATABASE quizdevdb02 OWNER quizadmin;
 ```
 
@@ -63,16 +64,21 @@ CREATE DATABASE quizdevdb02 OWNER quizadmin;
 
 ```bash
 cd backend
-cp .env .env.local 2>/dev/null; # .env is already committed for local dev
-# Edit backend/.env:
-#   DATABASE_URL=postgres://quizadmin:quizDev04@localhost:5432/quizdevdb02
-#   JWT_SECRET=<long random string>
+cp .env.example .env   # gitignored; never commit this file
+# Edit backend/.env and set real values:
+#   DATABASE_URL=postgres://quizadmin:<your-password>@localhost:5432/quizdevdb02
+#   JWT_SECRET=<output of: openssl rand -base64 48>   (>= 32 chars, required)
 #   PORT=4000
+#   CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173   (optional)
 
 cargo run --bin seed      # run migrations + load 3 sample quizzes
 cargo run --bin seed_gre  # optional: load 37 GregMat GRE vocabulary quizzes
 cargo run                 # start API on http://localhost:4000
 ```
+
+The backend validates `JWT_SECRET` at startup: it must be at least 32
+characters and must not be the `.env.example` placeholder, or the process
+refuses to start.
 
 Migrations also run automatically on server startup.
 
@@ -92,8 +98,18 @@ The frontend calls the API at `http://localhost:4000` by default; override with
 The whole stack (PostgreSQL + API + frontend) can run with Docker Compose:
 
 ```bash
+cp .env.example .env     # root .env, gitignored; fill in POSTGRES_PASSWORD + JWT_SECRET
 docker compose up --build      # frontend on http://localhost:8080, API on :4000
 ```
+
+Compose reads secrets from the root `.env` (auto-loaded) — none are hardcoded
+in the compose files. `POSTGRES_PASSWORD` and `JWT_SECRET` are required; if
+they are missing, Compose fails fast with an error. For production, layer the
+overrides (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`).
+
+> Note: the `postgres` image only sets `POSTGRES_PASSWORD` when the `pgdata`
+> volume is first created. To rotate the password later, run
+> `docker compose down -v` (wipes local data) before changing `.env`.
 
 - `backend/Dockerfile` — multi-stage Rust build; the entrypoint seeds the
   database (idempotent) and starts the API.
@@ -107,6 +123,27 @@ The frontend calls the API with a **relative** base (`/api`) by default: during
 `npm run dev` the Vite dev server proxies `/api` to `http://localhost:4000`,
 and in Docker nginx handles the proxying. Set `VITE_API_BASE` to target a
 different origin instead.
+
+## Secrets & Configuration
+
+All secrets live in gitignored `.env` files; only `.env.example` templates are
+committed. Never commit a real `.env`, and never bake secrets into images or
+tracked files.
+
+| File | Purpose | Gitignored |
+| --- | --- | --- |
+| `backend/.env` | Local (non-Docker) backend: `DATABASE_URL`, `JWT_SECRET`, `PORT`, `CORS_ORIGINS` | yes |
+| `.env` (repo root) | Docker Compose: `POSTGRES_*`, `JWT_SECRET` | yes |
+| `backend/.env.example` / `.env.example` | Templates to copy from | no |
+
+- Backend config is read from the environment (loaded via `dotenvy`) and
+  validated in `backend/src/config.rs` (`Config::from_env`) — bad/missing
+  secrets fail fast at startup instead of surfacing later.
+- `JWT_SECRET` must be ≥ 32 chars; generate with `openssl rand -base64 48`.
+- The frontend has no secrets: `VITE_API_BASE` is a non-secret build-time
+  override, and the API base defaults to a relative `/api`.
+- Docker images never contain `.env` files (excluded via `.dockerignore`; the
+  backend gets its config at runtime from Compose `environment`).
 
 ## Dev Notes
 

@@ -10,11 +10,13 @@ use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-use crate::config::AppState;
+use crate::config::{AppState, Config};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
+
+    let config = Config::from_env()?;
 
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -23,16 +25,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let database_url = std::env::var("DATABASE_URL")?;
-    let jwt_secret = std::env::var("JWT_SECRET")?;
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(4000);
-
     let pool = PgPoolOptions::new()
         .max_connections(10)
-        .connect(&database_url)
+        .connect(&config.database_url)
         .await?;
 
     // Run migrations on startup.
@@ -40,14 +35,11 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState {
         db: pool.clone(),
-        jwt_secret,
+        jwt_secret: config.jwt_secret,
     };
 
     let cors = CorsLayer::new()
-        .allow_origin([
-            "http://localhost:5173".parse()?,
-            "http://127.0.0.1:5173".parse()?,
-        ])
+        .allow_origin(config.cors_origins)
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
 
@@ -67,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    let addr = format!("0.0.0.0:{port}");
+    let addr = format!("0.0.0.0:{}", config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("listening on http://{addr}");
 

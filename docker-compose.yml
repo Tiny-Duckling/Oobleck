@@ -2,13 +2,13 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: quizadmin
-      POSTGRES_PASSWORD: quizDev04
-      POSTGRES_DB: quizdevdb02
+      POSTGRES_USER: ${POSTGRES_USER:-quizadmin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-quizdevdb02}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quizadmin -d quizdevdb02"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quizadmin} -d ${POSTGRES_DB:-quizdevdb02}"]
       interval: 3s
       timeout: 3s
       retries: 15
@@ -16,9 +16,8 @@ services:
   backend:
     build: ./backend
     environment:
-      DATABASE_URL: postgres://quizadmin:quizDev04@db:5432/quizdevdb02
-      # Change this for anything beyond local development.
-      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-0123456789abcdef}
+      DATABASE_URL: postgres://${POSTGRES_USER:-quizadmin}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-quizdevdb02}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       PORT: 4000
       RUST_LOG: quiz_backend=debug,tower_http=info
     ports:
