@@ -21,11 +21,11 @@ pub fn create_token(
         username: username.to_string(),
         exp: Utc::now().timestamp() + 7 * 24 * 3600,
     };
-    Ok(encode(
+    encode(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(secret.as_bytes()),
-    )?)
+    )
 }
 
 pub fn verify_token(token: &str, secret: &str) -> Option<Claims> {

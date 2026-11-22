@@ -35,6 +35,8 @@ frontend/          SvelteKit app (Svelte 5, TypeScript)
   src/lib/api.ts   typed API client
   src/lib/auth.svelte.ts  auth store (runes, persisted to localStorage)
   src/routes/       pages: home, login, register, quiz/[id], history, attempts/[id]
+docs/              Architecture and planning documentation
+  postgresql-features.md  PostgreSQL-specific features & patterns used
 ```
 
 ## API

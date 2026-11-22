@@ -238,13 +238,12 @@ pub async fn submit_quiz(
     let user_id = Uuid::parse_str(&user_id)
         .map_err(|_| AppError::Unauthorized("invalid token subject".into()))?;
 
-    let (expected_questions,): (i32,) = sqlx::query_as(
-        "SELECT total_questions FROM quizzes WHERE id = $1",
-    )
-    .bind(quiz_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| AppError::NotFound("quiz not found".into()))?;
+    let (expected_questions,): (i32,) =
+        sqlx::query_as("SELECT total_questions FROM quizzes WHERE id = $1")
+            .bind(quiz_id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("quiz not found".into()))?;
 
     if expected_questions == 0 {
         return Err(AppError::NotFound(

@@ -53,7 +53,7 @@ export interface Attempt {
 	quiz_title: string;
 	/** null while the attempt has not been submitted */
 	score: number | null;
-	total_questions: number | null;
+	total_questions: number;
 	/** null while the attempt has not been submitted */
 	submitted_at: string | null;
 	/** when the quiz was opened */

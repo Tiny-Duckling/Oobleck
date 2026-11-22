@@ -1,0 +1,262 @@
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^release-.*$/
+    - if: $CI_COMMIT_BRANCH == "master"
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+stages:
+  - validate
+  - test
+  - security
+  - build
+  - deploy
+
+default:
+  interruptible: true
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+
+.rust:
+  image: rust:1-slim-bookworm
+  cache:
+    key:
+      files:
+        - backend/Cargo.lock
+    paths:
+      - .cargo/registry
+      - .cargo/git
+      - backend/target
+
+.node:
+  image: node:22-alpine
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+    paths:
+      - frontend/node_modules
+      - frontend/.svelte-kit
+
+# ---------------------------------------------------------------------------
+# Stage: validate
+# ---------------------------------------------------------------------------
+
+fmt:
+  extends: .rust
+  stage: validate
+  script:
+    - cd backend
+    - cargo fmt --all -- --check
+
+clippy:
+  extends: .rust
+  stage: validate
+  script:
+    - cd backend
+    - cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+frontend-check:
+  extends: .node
+  stage: validate
+  script:
+    - cd frontend
+    - npm ci --prefer-offline --no-audit
+    - npm run check
+
+hadolint:
+  stage: validate
+  image: hadolint/hadolint:v2.12.0-debian
+  script:
+    - hadolint backend/Dockerfile frontend/Dockerfile
+
+compose-config:
+  stage: validate
+  image: docker:29-cli
+  variables:
+    POSTGRES_USER: ci_user
+    POSTGRES_PASSWORD: ci_password
+    POSTGRES_DB: ci_db
+    JWT_SECRET: ci_secret_at_least_32_chars_long
+  script:
+    - docker compose config -q
+
+# ---------------------------------------------------------------------------
+# Stage: test
+# ---------------------------------------------------------------------------
+
+backend-test:
+  extends: .rust
+  stage: test
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    POSTGRES_USER: test
+    POSTGRES_PASSWORD: test
+    POSTGRES_DB: test
+    DATABASE_URL: postgres://test:test@postgres:5432/test
+    JWT_SECRET: ci-only-secret-at-least-32-characters-long
+  script:
+    - cd backend
+    - cargo test --workspace --all-targets
+
+# ---------------------------------------------------------------------------
+# Stage: security
+# ---------------------------------------------------------------------------
+
+cargo-audit:
+  extends: .rust
+  stage: security
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev
+  script:
+    - cargo install cargo-audit --locked
+    - cd backend
+    - cargo audit
+
+npm-audit:
+  extends: .node
+  stage: security
+  script:
+    - cd frontend
+    - npm audit --omit=dev --audit-level=high
+
+# ---------------------------------------------------------------------------
+# Stage: build
+# ---------------------------------------------------------------------------
+
+build:backend:
+  stage: build
+  image: docker:29-cli
+  services:
+    - docker:29-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  needs:
+    - fmt
+    - clippy
+    - backend-test
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - |
+      TAGS="--tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA"
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ] || [ "$CI_COMMIT_BRANCH" = "master" ]; then
+        TAGS="$TAGS --tag $CI_REGISTRY_IMAGE/backend:latest"
+      fi
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        TAGS="$TAGS --tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_TAG"
+      fi
+      docker buildx build --push $TAGS \
+        --cache-from "type=registry,ref=$CI_REGISTRY_IMAGE/backend:buildcache" \
+        --cache-to "type=registry,ref=$CI_REGISTRY_IMAGE/backend:buildcache,mode=max" \
+        backend
+
+build:frontend:
+  stage: build
+  image: docker:29-cli
+  services:
+    - docker:29-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  needs:
+    - frontend-check
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - |
+      TAGS="--tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA"
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ] || [ "$CI_COMMIT_BRANCH" = "master" ]; then
+        TAGS="$TAGS --tag $CI_REGISTRY_IMAGE/frontend:latest"
+      fi
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        TAGS="$TAGS --tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_TAG"
+      fi
+      docker buildx build --push $TAGS \
+        --cache-from "type=registry,ref=$CI_REGISTRY_IMAGE/frontend:buildcache" \
+        --cache-to "type=registry,ref=$CI_REGISTRY_IMAGE/frontend:buildcache,mode=max" \
+        frontend
+
+# ---------------------------------------------------------------------------
+# Stage: deploy
+# ---------------------------------------------------------------------------
+
+deploy:preproduction:
+  stage: deploy
+  image: alpine:3.20
+  environment:
+    name: pre-production
+    url: https://staging.example.com
+  resource_group: preproduction
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^release-.*$/
+  needs:
+    - build:backend
+    - build:frontend
+  before_script:
+    - apk add --no-cache openssh-client curl
+    - eval $(ssh-agent -s)
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - ssh-add "$SSH_PRIVATE_KEY"
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+  script:
+    - ssh "$STAGING_DEPLOY_USER@$STAGING_DEPLOY_HOST" "cd $STAGING_DEPLOY_PATH && IMAGE_TAG=$CI_COMMIT_SHA ./deploy/deploy.sh"
+    - curl -fsS --retry 10 --retry-delay 3 "${STAGING_HEALTH_URL:-https://staging.example.com/api/health}"
+
+deploy:production:
+  stage: deploy
+  image: alpine:3.20
+  environment:
+    name: production
+    url: https://quiz.example.com
+  resource_group: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  needs:
+    - build:backend
+    - build:frontend
+  before_script:
+    - apk add --no-cache openssh-client curl
+    - eval $(ssh-agent -s)
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - ssh-add "$SSH_PRIVATE_KEY"
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+  script:
+    - ssh "$PROD_DEPLOY_USER@$PROD_DEPLOY_HOST" "cd $PROD_DEPLOY_PATH && IMAGE_TAG=$CI_COMMIT_SHA ./deploy/deploy.sh"
+    - curl -fsS --retry 10 --retry-delay 3 "${PROD_HEALTH_URL:-https://quiz.example.com/api/health}"
+
+rollback:production:
+  stage: deploy
+  image: alpine:3.20
+  environment:
+    name: production
+    url: https://quiz.example.com
+  resource_group: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+      when: manual
+      allow_failure: true
+  before_script:
+    - apk add --no-cache openssh-client curl
+    - eval $(ssh-agent -s)
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - ssh-add "$SSH_PRIVATE_KEY"
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+  script:
+    - ssh "$PROD_DEPLOY_USER@$PROD_DEPLOY_HOST" "cd $PROD_DEPLOY_PATH && ./deploy/rollback.sh"
+    - curl -fsS --retry 10 --retry-delay 3 "${PROD_HEALTH_URL:-https://quiz.example.com/api/health}"

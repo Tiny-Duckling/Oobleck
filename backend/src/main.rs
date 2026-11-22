@@ -49,6 +49,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .max_age(std::time::Duration::from_secs(86_400));
 
     let app = Router::new()
+        .route("/api/health", get(routes::health))
         .route("/api/auth/register", post(routes::auth::register))
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/quizzes", get(routes::quizzes::list_quizzes))

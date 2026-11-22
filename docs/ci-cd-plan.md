@@ -23,11 +23,12 @@ What the pipeline has to work with:
 
 ### Goals
 
-1. Every merge request is gated by formatting, linting, tests, type-checking, builds, dependency audits, and image builds.
-2. Every commit on `main` produces immutable images in the GitLab Container Registry and deploys automatically to staging.
-3. Every `vX.Y.Z` tag can be deployed to production with one manual click, verified by a smoke test, and rolled back in under five minutes.
-4. No secret is ever committed, baked into an image, or printed in a job log.
-5. Warm pipeline under ~10 minutes; no duplicated MR/branch pipelines.
+1. Every commit on a `release-*` or `master` branch is gated by formatting, linting, tests, type-checking, builds, dependency audits, and image builds.
+2. Direct push to any `release-*` branch (e.g. `release-v1.0.0`, `release-2026.11`) automatically builds an immutable container image and deploys to the **Pre-Production** server for verification and testing—no PR required.
+3. Merging a `release-*` branch into `master` automatically promotes the verified image and deploys to the **Production** server with a pre-flight DB backup, health verification, and rollback capability.
+4. "Build Once, Promote Everywhere": Production deploys the exact immutable image SHA verified on pre-production—never rebuilds from source.
+5. No secret is ever committed, baked into an image, or printed in a job log.
+6. Warm pipeline under ~10 minutes.
 
 ### Non-goals (for now)
 
@@ -37,61 +38,68 @@ What the pipeline has to work with:
 ## 3. Target flow
 
 ```text
-MR ──────► validate ─► test ─► security ─► build images (no deploy)
-main ────► same ──────────────────────────► push :sha/:latest ─► deploy staging (auto)
-tag v* ──► same ──────────────────────────► push :sha/:semver ─► deploy production (manual)
-                                                                      │
-                                                                      ├─► smoke test
-                                                                      └─► record last-good tag
+[ Push to release-* branch ] ──► validate ─► test ─► security ─► build :sha ─► deploy pre-production (auto)
+                                                                                    │
+                                                                                    └─► smoke test & manual QA
+                                                                                             │
+                                                                                    [ Release Verified ]
+                                                                                             │
+                                                                                             ▼
+[ Merge release-* to master ] ────────────────────────────────► promote :sha ──► deploy production (auto)
+                                                                                    │
+                                                                                    ├─► DB backup
+                                                                                    ├─► smoke test
+                                                                                    └─► record last-good tag
 ```
 
 Registry: **GitLab Container Registry** (`registry.gitlab.com/tiny-duckling/oobleck`).
 
 ```text
-VPS
-├── Caddy (TLS, :80/:443)
-│   └── frontend container (nginx, 127.0.0.1:8080)
-│       └── /api ──► backend container (:4000, not published)
-│                        └── db container (Postgres 16, not published)
-└── /opt/oobleck/{.env, docker-compose.yml, docker-compose.prod.yml, deploy.sh}
+SERVERS
+├── Pre-Production (Staging VPS or isolated staging stack on port :8081)
+│   └── /opt/oobleck-staging/{.env, docker-compose.yml, deploy.sh}
+└── Production (Production VPS on port :8080 behind Caddy TLS :80/:443)
+    └── /opt/oobleck/{.env, docker-compose.yml, deploy.sh}
 ```
 
 ## 4. Pipeline design
 
 ### 4.1 Workflow rules
 
-Only create pipelines for merge requests, the default branch, and release tags. This prevents the classic duplicate MR + branch pipeline.
+Create pipelines for pushes to release branches (`release-*`), commits on `master`, and release tags. No PR/MR is required to deploy to pre-production.
 
 ```yaml
 workflow:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH =~ /^release-.*$/
+    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
 ```
 
 ### 4.2 Stages and jobs
 
-| Stage | Job | Purpose | Blocks merge |
+| Stage | Job | Purpose | Trigger |
 | --- | --- | --- | --- |
-| validate | `fmt` | `cargo fmt --all -- --check` | yes |
-| validate | `clippy` | `cargo clippy --all-targets --all-features -- -D warnings` | yes |
-| validate | `frontend-check` | `npm ci` + `npm run check` | yes |
-| validate | `hadolint` | Lint both Dockerfiles | yes |
-| validate | `compose-config` | `docker compose ... config -q` | yes |
-| test | `backend-test` | `cargo test --all-targets` with a Postgres service | yes |
-| test | `frontend-test` | Vitest + coverage (new tests required) | yes |
-| security | `cargo-audit` | RustSec advisories against `Cargo.lock` | yes |
-| security | `npm-audit` | `npm audit --omit=dev --audit-level=high` | yes |
-| security | `trivy-fs` | Lockfile/config scan, fail on CRITICAL | yes |
-| security | GitLab SAST + Secret Detection | Templates, if enabled on the tier | yes |
-| build | `build-backend` | Buildx image, push SHA/semver/latest | yes |
-| build | `build-frontend` | Buildx image, push SHA/semver/latest | yes |
-| build | `trivy-image` | Scan both images, fail on CRITICAL | yes |
-| build | `compose-smoke` | Start full stack with ephemeral secrets, hit `/api/health` | yes |
-| deploy | `deploy-staging` | Auto on `main` | n/a |
-| deploy | `deploy-production` | Manual on `v*` tag | n/a |
-| deploy | `rollback-production` | Manual, redeploy `.last_good_tag` | n/a |
+| validate | `fmt` | `cargo fmt --all -- --check` | all pipelines |
+| validate | `clippy` | `cargo clippy --all-targets --all-features -- -D warnings` | all pipelines |
+| validate | `frontend-check` | `npm ci` + `npm run check` | all pipelines |
+| validate | `hadolint` | Lint both Dockerfiles | all pipelines |
+| validate | `compose-config` | `docker compose ... config -q` | all pipelines |
+| test | `backend-test` | `cargo test --all-targets` with a Postgres service | all pipelines |
+| test | `frontend-test` | Vitest + coverage | all pipelines |
+| security | `cargo-audit` | RustSec advisories against `Cargo.lock` | all pipelines |
+| security | `npm-audit` | `npm audit --omit=dev --audit-level=high` | all pipelines |
+| security | `trivy-fs` | Lockfile/config scan, fail on CRITICAL | all pipelines |
+| security | GitLab SAST + Secret Detection | Security templates | all pipelines |
+| build | `build-backend` | Buildx image, tag `:sha-$CI_COMMIT_SHA` | all pipelines |
+| build | `build-frontend` | Buildx image, tag `:sha-$CI_COMMIT_SHA` | all pipelines |
+| build | `trivy-image` | Scan both images, fail on CRITICAL | all pipelines |
+| build | `compose-smoke` | Start ephemeral stack, hit `/api/health` | all pipelines |
+| deploy | `deploy-preproduction` | Deploy image to Pre-Production (Staging) | Push to `release-*` |
+| deploy | `smoke-preproduction` | Poll staging `/api/health` + e2e check | Push to `release-*` |
+| deploy | `deploy-production` | Deploy verified image to Production | Merge to `master` / tag |
+| deploy | `smoke-production` | Poll prod `/api/health`, rollback on fail | Merge to `master` / tag |
+| deploy | `rollback-production` | Manual emergency redeploy of `.last_good_tag` | Manual button |
 
 Notes:
 
@@ -168,26 +176,36 @@ In GitLab project settings, require the pipeline to succeed on `main` and requir
 
 Production always deploys an immutable tag (`SHA` or semver), never `latest`. Registry cleanup: delete MR/SHA tags older than 30 days; keep all semver tags.
 
-### 6.2 Production compose file
+### 6.2 Single parameterized compose file
 
-Add `docker-compose.prod.yml` as an override of the base file:
+Rather than maintaining multiple compose files for different environments (which risks configuration drift and requires complex `-f` override flags), use a **single `docker-compose.yml`** parameterized with environment variable defaults:
 
-- `backend` and `frontend` use `image: ${REGISTRY_IMAGE}/...:${IMAGE_TAG}` and drop `build:`.
-- `backend` publishes no host port (`ports: !reset []`); the frontend nginx reaches it over the compose network.
-- `frontend` binds only to localhost (`127.0.0.1:8080:80`) behind Caddy.
-- `db` publishes no port.
-- Add backend/frontend healthchecks; change frontend `depends_on` to `condition: service_healthy`.
-- `!reset` requires Compose ≥ 2.24; pin the Compose version on the VPS. If that is a problem, keep a self-contained prod compose file instead.
+- **Images:**
+  ```yaml
+  backend:
+    image: ${BACKEND_IMAGE:-oobleck-backend:local}
+    build: ./backend
+  frontend:
+    image: ${FRONTEND_IMAGE:-oobleck-frontend:local}
+    build: ./frontend
+  ```
+  - In local dev: defaults to building from source (`./backend`, `./frontend`).
+  - In pre-prod & prod: `.env` sets `BACKEND_IMAGE` and `FRONTEND_IMAGE` to registry tags (e.g. `$CI_REGISTRY_IMAGE/backend:$IMAGE_TAG`), so Compose pulls pre-built images without compiling on the server.
+- **Port Exposure:**
+  - Backend: Publish no host port in production. Set `BACKEND_PORT_MAPPING=""` in production `.env` (or map only to `127.0.0.1:4000:4000` in dev).
+  - Frontend: Bind to localhost behind Caddy in production via `FRONTEND_BIND=127.0.0.1` and `FRONTEND_PORT=8080`.
+  - Database: Publishes no host port in any environment; accessed only through internal Compose network.
+- **Healthchecks:**
+  - Embedded in the base `docker-compose.yml` with `pg_isready` for `db` and `/api/health` curl for `backend`.
 
-Also harden the backend runtime image with a non-root user and `curl` (needed by the healthcheck), or use a tiny static healthcheck binary.
+Also harden the backend runtime image with a non-root user and `curl` (needed by the healthcheck).
 
 ### 6.3 Server layout
 
 ```text
 /opt/oobleck/
-├── .env                     # POSTGRES_*, JWT_SECRET, REGISTRY_IMAGE (mode 600)
+├── .env                     # POSTGRES_*, JWT_SECRET, BACKEND_IMAGE, FRONTEND_IMAGE (mode 600)
 ├── docker-compose.yml
-├── docker-compose.prod.yml
 ├── deploy.sh
 ├── rollback.sh
 ├── .current_tag
@@ -199,24 +217,46 @@ Staging uses the same scripts with a separate directory, `COMPOSE_PROJECT_NAME=o
 
 ### 6.4 Deploy flow
 
-1. CI finishes build + image scan on a `main` push or `v*` tag.
-2. Deploy job SSHes to the VPS and runs `IMAGE_TAG=<sha> ./deploy.sh`.
-3. `deploy.sh`:
-   - takes a `flock` lock;
-   - backs up the database with `pg_dump` (skip on first deploy);
-   - `docker compose pull backend frontend`;
-   - `docker compose up -d --wait --wait-timeout 180`;
-   - polls `http://127.0.0.1:8080/api/health` until healthy;
-   - records the previous tag in `.last_good_tag` and the new tag in `.current_tag`;
-   - prunes dangling images.
-4. A `verify` step (inside the script or a separate CI job) checks the public URL over HTTPS.
-5. If the smoke test fails, the deploy job fails; run `rollback-production`.
+#### Phase A: Pre-Production Deployment (On Push to `release-*`)
 
-### 6.5 Rollback
+1. Developer pushes directly to a release branch (e.g. `release-v1.2.0` or `release-2026.11`).
+2. CI runs validation, tests, and security scans.
+3. CI builds backend and frontend images tagged `:sha-$CI_COMMIT_SHA` and pushes to the GitLab Container Registry.
+4. `deploy-preproduction` SSHes to the Pre-Production host (`/opt/oobleck-staging`):
+   - Sets `IMAGE_TAG=$CI_COMMIT_SHA` and executes `./deploy.sh`.
+   - Runs database migrations automatically on backend container startup.
+   - Polls `http://127.0.0.1:8081/api/health` until healthy (or times out after 180s).
+5. `smoke-preproduction` runs automated end-to-end checks against the live pre-production URL.
+6. The team performs QA / acceptance testing against the live pre-production server.
 
-- Manual GitLab job `rollback-production` runs `rollback.sh`, which redeploys `.last_good_tag`.
-- Database migrations are **forward-only**. Rollback only swaps the application image. Any migration must be backward-compatible with the previous app version (expand/contract pattern).
-- Take a pre-deploy dump so a destructive migration can be recovered manually.
+#### Phase B: Production Deployment (On Merge of `release-*` to `master`)
+
+1. The verified `release-*` branch is merged into `master`.
+2. The pipeline skips rebuilding source code, promoting the existing `:sha-$CI_COMMIT_SHA` image verified on pre-production.
+3. `deploy-production` SSHes to the Production host (`/opt/oobleck`):
+   - Takes a pre-deploy `pg_dump` backup before any container changes:
+     ```bash
+     $COMPOSE exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "backups/pre-${IMAGE_TAG}-$(date +%Y%m%d%H%M%S).sql.gz"
+     ```
+   - Pulls and deploys `:sha-$CI_COMMIT_SHA` via `docker compose up -d --wait`.
+   - Backend automatically applies new migrations via `sqlx::migrate!`.
+   - Polls `http://127.0.0.1:8080/api/health`.
+4. `smoke-production` validates public HTTPS health and critical paths.
+5. If the smoke test fails:
+   - Automated rollback is immediately triggered, restarting the previous container tag saved in `.last_good_tag`.
+   - A critical alert is dispatched.
+6. If the smoke test passes:
+   - `.last_good_tag` is updated with the current tag.
+   - Old container images are pruned.
+
+### 6.5 Database migration safety between environments
+
+Because Pre-Production runs migrations before Production:
+- **Forward-Only, Expand/Contract Migrations:** Never remove or rename columns in the same release that introduces their replacement.
+  - *Step 1 (Expand):* Add the new nullable/defaulted column or table. Both old and new application versions work.
+  - *Step 2 (Contract):* Once verified on production, submit a follow-up release to drop deprecated columns.
+- **Pre-Deploy Dumps:** Production always executes a `pg_dump` immediately before applying container updates so a catastrophic data-altering migration can be manually restored if needed.
+- **Rollback Limitation:** Rolling back a container reverts the application binary; it does not roll back database schema. Backward-compatible migrations ensure the old application binary can safely read the updated schema.
 
 ### 6.6 Migrations and seeding
 
@@ -270,12 +310,12 @@ Rules:
 - Add `rust-toolchain.toml`.
 - Add `GET /api/health` (no DB) and `GET /api/ready` (`SELECT 1`) to the backend.
 - Add backend/frontend healthchecks and non-root backend user; add `curl` to the runtime image.
-- Add `docker-compose.prod.yml`.
+- Parameterize `docker-compose.yml` with environment defaults for dev vs prod.
 - Add `deploy/deploy.sh` and `deploy/rollback.sh`.
 - Add Vitest + `@vitest/coverage-v8` and the first unit tests (`lib/api.ts` is the easiest target).
 - Measure backend and frontend coverage and record the baseline.
 
-**Exit:** all checks in §5.1 pass locally; prod compose validates with dummy env vars.
+**Exit:** all checks in §5.1 pass locally; compose validates with dummy env vars.
 
 ### Phase 1 — CI validate + test (0.5–1 day)
 
@@ -298,20 +338,21 @@ Rules:
 
 **Exit:** every `main` commit yields pullable `:sha` and `:latest` images; the full stack starts and answers `/api/health` in CI.
 
-### Phase 4 — Staging CD (0.5 day)
+### Phase 4 — Pre-Production (Staging) CD (0.5 day)
 
-- Provision staging (VPS or compose project), TLS, `.env`, registry login.
-- Add `deploy-staging` on `main`.
+- Provision pre-production environment (VPS or isolated compose project), TLS, `.env`, registry login.
+- Add `deploy-preproduction` and `smoke-preproduction` on `release-*` branch push events.
 
-**Exit:** merging to `main` deploys staging automatically and the public health check passes.
+**Exit:** any push to a `release-*` branch automatically builds `:sha` images, deploys to pre-production, and passes automated health/smoke checks without requiring a PR.
 
 ### Phase 5 — Production CD (1 day)
 
 - Provision production VPS: Docker + Compose, deploy user, firewall, Caddy, DNS.
-- Add `deploy-production` (manual on tag) and `rollback-production`.
+- Add `deploy-production` (automatic on merge of `release-*` into `master` or semver tag) with pre-deploy database backup.
+- Add `rollback-production` with automated failure trigger and manual fallback.
 - Run a rollback drill.
 
-**Exit:** a tag deploys production with one click; rollback restores the previous tag in under five minutes.
+**Exit:** merging a `release-*` branch into `master` promotes the verified `:sha` image directly to production with zero image rebuild; rollback restores the previous tag in under five minutes.
 
 ### Phase 6 — Hardening (ongoing)
 
@@ -324,13 +365,14 @@ Rules:
 
 ## 9. Acceptance criteria
 
-- [ ] A merge request cannot merge unless validate, test, security, and build jobs pass.
-- [ ] `main` produces immutable images and deploys staging automatically.
-- [ ] A `vX.Y.Z` tag produces a semver image and a manual production deploy that ends with a passing HTTPS health check.
-- [ ] Rollback to the previous image is a single manual job and completes in under five minutes.
+- [ ] Every push to a `release-*` branch builds an immutable `:sha` image and deploys to the Pre-Production server automatically.
+- [ ] Pre-production deployment executes database migrations and passes automated smoke checks without a PR.
+- [ ] Merging a `release-*` branch into `master` promotes the verified `:sha` image and deploys to Production automatically without rebuilding.
+- [ ] A pre-deploy database backup is captured before any production container update.
+- [ ] Rollback to the previous image completes automatically if production smoke tests fail, or in under five minutes via manual trigger.
 - [ ] Secret Detection is green; no real secret exists in git history or job logs.
 - [ ] Warm pipeline completes in under ~10 minutes.
-- [ ] Coverage is reported per MR and enforced at the agreed floor.
+- [ ] Coverage is enforced at the agreed floor.
 - [ ] No production port except `22`, `80`, `443` is reachable from the internet.
 
 ## 10. Risks and mitigations
@@ -363,7 +405,6 @@ Rules:
 ```text
 .gitlab-ci.yml                  # pipeline
 rust-toolchain.toml             # pinned Rust + fmt/clippy
-docker-compose.prod.yml         # registry images, no public backend port
 deploy/deploy.sh                # pull, up --wait, smoke, tag bookkeeping
 deploy/rollback.sh              # redeploy last-good tag
 deploy/Caddyfile                # optional, if Caddy runs in compose
@@ -371,7 +412,7 @@ frontend/vitest.config.ts       # Vitest + coverage
 frontend/src/lib/*.test.ts      # first frontend tests
 backend/src/routes/mod.rs       # /api/health, /api/ready
 backend/Dockerfile              # non-root user, curl for healthcheck
-docker-compose.yml              # healthchecks, depends_on conditions
+docker-compose.yml              # parameterized images, healthchecks, conditions
 ```
 
 ## Appendix B — Illustrative `.gitlab-ci.yml` skeleton
@@ -381,8 +422,8 @@ docker-compose.yml              # healthchecks, depends_on conditions
 ```yaml
 workflow:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH =~ /^release-.*$/
+    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
 
 stages: [validate, test, security, build, deploy]
@@ -439,7 +480,7 @@ compose-config:
     IMAGE_TAG: ci
     REGISTRY_IMAGE: registry.example.com/group/project
   script:
-    - docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q
+    - docker compose config -q
 
 backend-test:
   extends: .rust
@@ -499,35 +540,46 @@ build:backend:
 
 # build:frontend mirrors build:backend with frontend/.
 
-deploy:staging:
+deploy:preproduction:
   stage: deploy
   image: alpine:3.20
   environment:
-    name: staging
+    name: pre-production
     url: https://staging.example.com
-  resource_group: staging
+  resource_group: preproduction
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH =~ /^release-.*$/
   needs: [build:backend, build:frontend]
   script:
-    - apk add --no-cache openssh-client
+    - apk add --no-cache openssh-client curl
     - eval $(ssh-agent -s)
     - chmod 600 "$SSH_PRIVATE_KEY"
     - ssh-add "$SSH_PRIVATE_KEY"
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
     - printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && IMAGE_TAG=$CI_COMMIT_SHA ./deploy.sh"
+    - ssh "$STAGING_DEPLOY_USER@$STAGING_DEPLOY_HOST" "cd $STAGING_DEPLOY_PATH && IMAGE_TAG=$CI_COMMIT_SHA ./deploy.sh"
+    - curl -fsS --retry 10 --retry-delay 3 https://staging.example.com/api/health
 
 deploy:production:
-  extends: deploy:staging
+  stage: deploy
+  image: alpine:3.20
   environment:
     name: production
     url: https://quiz.example.com
   resource_group: production
   rules:
+    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
-      when: manual
-      allow_failure: false
+  needs: [build:backend, build:frontend]
+  script:
+    - apk add --no-cache openssh-client curl
+    - eval $(ssh-agent -s)
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - ssh-add "$SSH_PRIVATE_KEY"
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+    - ssh "$PROD_DEPLOY_USER@$PROD_DEPLOY_HOST" "cd $PROD_DEPLOY_PATH && IMAGE_TAG=$CI_COMMIT_SHA ./deploy.sh"
+    - curl -fsS --retry 10 --retry-delay 3 https://quiz.example.com/api/health
 ```
 
 ## Appendix C — Deploy script sketch
@@ -539,7 +591,7 @@ set -euo pipefail
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
 cd /opt/oobleck
 
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+COMPOSE="docker compose"
 PREVIOUS="$(cat .current_tag 2>/dev/null || true)"
 
 exec 9>/tmp/oobleck-deploy.lock

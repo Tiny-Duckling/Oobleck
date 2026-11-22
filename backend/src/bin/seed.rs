@@ -199,18 +199,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         created += 1;
         let quiz_id = Uuid::new_v4();
-        sqlx::query("INSERT INTO quizzes (id, title, description, total_questions) VALUES ($1, $2, $3, $4)")
-            .bind(quiz_id)
-            .bind(title)
-            .bind(description)
-            .bind(questions.len() as i32)
-            .execute(&pool)
-            .await?;
+        sqlx::query(
+            "INSERT INTO quizzes (id, title, description, total_questions) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(quiz_id)
+        .bind(title)
+        .bind(description)
+        .bind(questions.len() as i32)
+        .execute(&pool)
+        .await?;
 
         for (q_pos, (q_text, options)) in questions.iter().enumerate() {
             let correct_count = options.iter().filter(|(_, is_correct)| *is_correct).count();
             if correct_count != 1 {
-                panic!("question {q_text:?} must have exactly 1 correct option, found {correct_count}");
+                panic!(
+                    "question {q_text:?} must have exactly 1 correct option, found {correct_count}"
+                );
             }
 
             let question_id = Uuid::new_v4();

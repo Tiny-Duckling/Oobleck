@@ -75,7 +75,7 @@
 	{:else}
 		<p class="meta">
 			Score: <strong>{attempt.score}</strong> / {attempt.total_questions}
-			({Math.round((attempt.score / (attempt.total_questions ?? 1)) * 100)}%) ·
+			({Math.round((attempt.score / attempt.total_questions) * 100)}%) ·
 			{new Date(attempt.submitted_at ?? attempt.started_at).toLocaleString()}
 		</p>
 	{/if}

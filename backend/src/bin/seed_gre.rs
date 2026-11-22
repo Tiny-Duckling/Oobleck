@@ -47,7 +47,7 @@ impl Rng {
     fn below(&mut self, n: usize) -> usize {
         (self.next_u64() % n as u64) as usize
     }
-    fn shuffle<T>(&mut self, items: &mut Vec<T>) {
+    fn shuffle<T>(&mut self, items: &mut [T]) {
         for i in (1..items.len()).rev() {
             let j = self.below(i + 1);
             items.swap(i, j);
@@ -152,11 +152,11 @@ fn make_cloze(sentence: &str, word: &str) -> Option<String> {
         let before_ok = s_lower[..idx]
             .chars()
             .next_back()
-            .map_or(true, |c| !c.is_alphanumeric());
+            .is_none_or(|c| !c.is_alphanumeric());
         let after_ok = s_lower[idx + w_lower.len()..]
             .chars()
             .next()
-            .map_or(true, |c| !c.is_alphanumeric());
+            .is_none_or(|c| !c.is_alphanumeric());
         if before_ok && after_ok {
             return Some(format!(
                 "{}_____{}",
@@ -242,7 +242,7 @@ fn build_questions(words: &[Word]) -> Vec<(i64, Vec<Question>)> {
         let mut questions = Vec::new();
 
         for &i in idxs {
-            questions.extend(questions_for_word(&words, i, &group_words, &mut rng));
+            questions.extend(questions_for_word(words, i, &group_words, &mut rng));
         }
 
         if questions.is_empty() {
@@ -360,7 +360,7 @@ fn questions_for_word(
 
     // 2. Definition -> word (production recall: meaning on top, word below).
     if let Some(correct) = w.meanings.first().cloned() {
-        if let Some(mut options) = pick_word_options(w, &word_pool, &words, 3) {
+        if let Some(mut options) = pick_word_options(w, &word_pool, words, 3) {
             options.push((w.word.clone(), true));
             rng.shuffle(&mut options);
             out.push(Question {
@@ -372,7 +372,7 @@ fn questions_for_word(
 
     // 3. Synonym MCQ (word on top, closest word below).
     if !w.synonyms.is_empty() {
-        if let Some(mut options) = pick_word_options(w, &word_pool, &words, 3) {
+        if let Some(mut options) = pick_word_options(w, &word_pool, words, 3) {
             options.push((w.synonyms[0].clone(), true));
             rng.shuffle(&mut options);
             out.push(Question {
@@ -387,7 +387,7 @@ fn questions_for_word(
 
     // 4. Cloze — blank the word inside its example sentence (context recall).
     if let Some(sentence) = w.examples.iter().find_map(|e| make_cloze(e, &w.word)) {
-        if let Some(mut options) = pick_word_options(w, &word_pool, &words, 3) {
+        if let Some(mut options) = pick_word_options(w, &word_pool, words, 3) {
             options.push((w.word.clone(), true));
             rng.shuffle(&mut options);
             out.push(Question {
@@ -526,26 +526,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let quiz_id = Uuid::new_v4();
-        sqlx::query("INSERT INTO quizzes (id, title, description, total_questions) VALUES ($1, $2, $3, $4)")
-            .bind(&quiz_id)
-            .bind(&title)
-            .bind(&description)
-            .bind(questions.len() as i32)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO quizzes (id, title, description, total_questions) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(quiz_id)
+        .bind(&title)
+        .bind(&description)
+        .bind(questions.len() as i32)
+        .execute(&mut *tx)
+        .await?;
 
         for (q_pos, q) in questions.iter().enumerate() {
-            let correct_count = q.options.iter().filter(|(_, is_correct)| *is_correct).count();
+            let correct_count = q
+                .options
+                .iter()
+                .filter(|(_, is_correct)| *is_correct)
+                .count();
             if correct_count != 1 {
-                panic!("question {:?} must have exactly 1 correct option, found {correct_count}", q.text);
+                panic!(
+                    "question {:?} must have exactly 1 correct option, found {correct_count}",
+                    q.text
+                );
             }
 
             let question_id = Uuid::new_v4();
             sqlx::query(
                 "INSERT INTO questions (id, quiz_id, text, position, subject_id) VALUES ($1, $2, $3, $4, $5)",
             )
-            .bind(&question_id)
-            .bind(&quiz_id)
+            .bind(question_id)
+            .bind(quiz_id)
             .bind(&q.text)
             .bind(q_pos as i32)
             .bind(subject_id)
@@ -557,7 +566,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "INSERT INTO options (id, question_id, text, is_correct, position) VALUES ($1, $2, $3, $4, $5)",
                 )
                 .bind(Uuid::new_v4())
-                .bind(&question_id)
+                .bind(question_id)
                 .bind(text)
                 .bind(is_correct)
                 .bind(o_pos as i32)
