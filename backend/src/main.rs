@@ -52,7 +52,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/auth/register", post(routes::auth::register))
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/quizzes", get(routes::quizzes::list_quizzes))
-        .route("/api/quizzes/generate", post(routes::quizzes::generate_quiz))
+        .route(
+            "/api/quizzes/generate",
+            post(routes::quizzes::generate_quiz),
+        )
         .route("/api/quizzes/{id}", get(routes::quizzes::get_quiz))
         .route(
             "/api/quizzes/{id}/submit",

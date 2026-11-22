@@ -1,4 +1,6 @@
-use argon2::password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::password_hash::{
+    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+};
 use argon2::Argon2;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -41,15 +43,21 @@ fn verify_password(password: &str, hash: &str) -> bool {
         Ok(h) => h,
         Err(_) => return false,
     };
-    Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok()
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed)
+        .is_ok()
 }
 
 fn validate_credentials(username: &str, password: &str) -> AppResult<()> {
     if username.len() < 3 || username.len() > 32 {
-        return Err(AppError::BadRequest("username must be 3-32 characters".into()));
+        return Err(AppError::BadRequest(
+            "username must be 3-32 characters".into(),
+        ));
     }
     if password.len() < 6 {
-        return Err(AppError::BadRequest("password must be at least 6 characters".into()));
+        return Err(AppError::BadRequest(
+            "password must be at least 6 characters".into(),
+        ));
     }
     Ok(())
 }
@@ -62,12 +70,10 @@ pub async fn register(
 
     let hash = hash_password(&body.password)?;
 
-    let exists = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM users WHERE username = $1",
-    )
-    .bind(&body.username)
-    .fetch_one(&state.db)
-    .await?;
+    let exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE username = $1")
+        .bind(&body.username)
+        .fetch_one(&state.db)
+        .await?;
 
     if exists > 0 {
         return Err(AppError::Conflict("username already taken".into()));
@@ -105,11 +111,17 @@ pub async fn login(
 
     let (user_id, hash) = match row {
         Some(r) => r,
-        None => return Err(AppError::Unauthorized("invalid username or password".into())),
+        None => {
+            return Err(AppError::Unauthorized(
+                "invalid username or password".into(),
+            ))
+        }
     };
 
     if !verify_password(&body.password, &hash) {
-        return Err(AppError::Unauthorized("invalid username or password".into()));
+        return Err(AppError::Unauthorized(
+            "invalid username or password".into(),
+        ));
     }
 
     let token = create_token(&user_id, &body.username, &state.jwt_secret)?;

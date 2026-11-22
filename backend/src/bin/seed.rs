@@ -13,40 +13,134 @@ type SeedQuiz = (
 
 fn quizzes() -> Vec<SeedQuiz> {
     vec![
-    (
-        "General Knowledge Basics",
-        "General Knowledge",
-        "A quick warm-up quiz covering everyday general knowledge.",
-        vec![
-            ("What is the capital of France?", vec![("Paris", true), ("London", false), ("Berlin", false), ("Madrid", false)]),
-            ("Which planet is known as the Red Planet?", vec![("Venus", false), ("Mars", true), ("Jupiter", false), ("Saturn", false)]),
-            ("How many continents are there on Earth?", vec![("5", false), ("6", false), ("7", true), ("8", false)]),
-            ("What is the largest ocean on Earth?", vec![("Atlantic", false), ("Indian", false), ("Arctic", false), ("Pacific", true)]),
-        ],
-    ),
-    (
-        "Web Development Fundamentals",
-        "Web Development",
-        "Test your knowledge of HTML, CSS, and the web platform.",
-        vec![
-            ("What does HTML stand for?", vec![("HyperText Markup Language", true), ("HighText Machine Language", false), ("Hyperlink Text Management Language", false), ("Home Tool Markup Language", false)]),
-            ("Which HTTP status code means 'Not Found'?", vec![("200", false), ("301", false), ("404", true), ("500", false)]),
-            ("In CSS, which property controls text color?", vec![("font-style", false), ("color", true), ("text-color", false), ("background", false)]),
-            ("Which tag is used for the largest heading in HTML?", vec![("<head>", false), ("<h6>", false), ("<h1>", true), ("<title>", false)]),
-            ("What does CORS stand for?", vec![("Cross-Origin Resource Sharing", true), ("Central Online Request System", false), ("Client-Origin Response Standard", false), ("Cached Object Retrieval Service", false)]),
-        ],
-    ),
-    (
-        "Rust Programming",
-        "Rust",
-        "Questions about ownership, borrowing, and the Rust ecosystem.",
-        vec![
-            ("Which keyword declares an immutable variable binding?", vec![("var", false), ("let", true), ("const", false), ("mut", false)]),
-            ("What is the size of a Rust char type in bytes?", vec![("1", false), ("2", false), ("4", true), ("8", false)]),
-            ("Which tool is Rust's official package manager?", vec![("npm", false), ("pip", false), ("cargo", true), ("gradle", false)]),
-            ("What does the Result<T, E> type represent?", vec![("A lazy iterator", false), ("Success or failure", true), ("A thread handle", false), ("A raw pointer", false)]),
-        ],
-    ),
+        (
+            "General Knowledge Basics",
+            "General Knowledge",
+            "A quick warm-up quiz covering everyday general knowledge.",
+            vec![
+                (
+                    "What is the capital of France?",
+                    vec![
+                        ("Paris", true),
+                        ("London", false),
+                        ("Berlin", false),
+                        ("Madrid", false),
+                    ],
+                ),
+                (
+                    "Which planet is known as the Red Planet?",
+                    vec![
+                        ("Venus", false),
+                        ("Mars", true),
+                        ("Jupiter", false),
+                        ("Saturn", false),
+                    ],
+                ),
+                (
+                    "How many continents are there on Earth?",
+                    vec![("5", false), ("6", false), ("7", true), ("8", false)],
+                ),
+                (
+                    "What is the largest ocean on Earth?",
+                    vec![
+                        ("Atlantic", false),
+                        ("Indian", false),
+                        ("Arctic", false),
+                        ("Pacific", true),
+                    ],
+                ),
+            ],
+        ),
+        (
+            "Web Development Fundamentals",
+            "Web Development",
+            "Test your knowledge of HTML, CSS, and the web platform.",
+            vec![
+                (
+                    "What does HTML stand for?",
+                    vec![
+                        ("HyperText Markup Language", true),
+                        ("HighText Machine Language", false),
+                        ("Hyperlink Text Management Language", false),
+                        ("Home Tool Markup Language", false),
+                    ],
+                ),
+                (
+                    "Which HTTP status code means 'Not Found'?",
+                    vec![
+                        ("200", false),
+                        ("301", false),
+                        ("404", true),
+                        ("500", false),
+                    ],
+                ),
+                (
+                    "In CSS, which property controls text color?",
+                    vec![
+                        ("font-style", false),
+                        ("color", true),
+                        ("text-color", false),
+                        ("background", false),
+                    ],
+                ),
+                (
+                    "Which tag is used for the largest heading in HTML?",
+                    vec![
+                        ("<head>", false),
+                        ("<h6>", false),
+                        ("<h1>", true),
+                        ("<title>", false),
+                    ],
+                ),
+                (
+                    "What does CORS stand for?",
+                    vec![
+                        ("Cross-Origin Resource Sharing", true),
+                        ("Central Online Request System", false),
+                        ("Client-Origin Response Standard", false),
+                        ("Cached Object Retrieval Service", false),
+                    ],
+                ),
+            ],
+        ),
+        (
+            "Rust Programming",
+            "Rust",
+            "Questions about ownership, borrowing, and the Rust ecosystem.",
+            vec![
+                (
+                    "Which keyword declares an immutable variable binding?",
+                    vec![
+                        ("var", false),
+                        ("let", true),
+                        ("const", false),
+                        ("mut", false),
+                    ],
+                ),
+                (
+                    "What is the size of a Rust char type in bytes?",
+                    vec![("1", false), ("2", false), ("4", true), ("8", false)],
+                ),
+                (
+                    "Which tool is Rust's official package manager?",
+                    vec![
+                        ("npm", false),
+                        ("pip", false),
+                        ("cargo", true),
+                        ("gradle", false),
+                    ],
+                ),
+                (
+                    "What does the Result<T, E> type represent?",
+                    vec![
+                        ("A lazy iterator", false),
+                        ("Success or failure", true),
+                        ("A thread handle", false),
+                        ("A raw pointer", false),
+                    ],
+                ),
+            ],
+        ),
     ]
 }
 
@@ -142,6 +236,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("seeded quiz: {title}");
     }
 
-    println!("done. {} quizzes seeded ({} skipped).", created, quizzes().len() - created);
+    println!(
+        "done. {} quizzes seeded ({} skipped).",
+        created,
+        quizzes().len() - created
+    );
     Ok(())
 }

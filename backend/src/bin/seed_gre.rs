@@ -328,7 +328,9 @@ fn questions_for_word(
         if pool.len() < 3 {
             pool.extend(
                 (0..words.len())
-                    .filter(|&j| j != i && !group_words.contains(&j) && same_pos(w.pos, words[j].pos))
+                    .filter(|&j| {
+                        j != i && !group_words.contains(&j) && same_pos(w.pos, words[j].pos)
+                    })
                     .filter_map(|j| {
                         let m = words[j].meanings.first().cloned()?;
                         (!m.is_empty() && seen_defs.insert(m.to_lowercase())).then_some(m)
@@ -374,7 +376,10 @@ fn questions_for_word(
             options.push((w.synonyms[0].clone(), true));
             rng.shuffle(&mut options);
             out.push(Question {
-                text: format!("Which word is closest in meaning to \u{201c}{}\u{201d}?", w.word),
+                text: format!(
+                    "Which word is closest in meaning to \u{201c}{}\u{201d}?",
+                    w.word
+                ),
                 options,
             });
         }
@@ -417,7 +422,10 @@ fn questions_for_word(
 // ---------------------------------------------------------------------------
 
 /// Insert the subject if missing and return its id.
-async fn ensure_subject(pool: &sqlx::PgPool, name: &str) -> Result<Uuid, Box<dyn std::error::Error>> {
+async fn ensure_subject(
+    pool: &sqlx::PgPool,
+    name: &str,
+) -> Result<Uuid, Box<dyn std::error::Error>> {
     sqlx::query("INSERT INTO subjects (name) VALUES ($1) ON CONFLICT (name) DO NOTHING")
         .bind(name)
         .execute(pool)

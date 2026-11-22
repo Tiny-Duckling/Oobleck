@@ -81,7 +81,6 @@ pub struct SubmitResponse {
 #[derive(Deserialize)]
 pub struct GenerateRequest {
     pub subject: String,
-    /// Number of questions to include; clamped to 1..=50.
     pub count: i64,
 }
 
@@ -154,7 +153,10 @@ pub async fn get_quiz(
             subject: qsubject,
             options: options
                 .into_iter()
-                .map(|(oid, otext)| OptionDto { id: oid, text: otext })
+                .map(|(oid, otext)| OptionDto {
+                    id: oid,
+                    text: otext,
+                })
                 .collect(),
         });
     }
@@ -177,11 +179,10 @@ pub async fn start_attempt(
     let user_id = Uuid::parse_str(&user_id)
         .map_err(|_| AppError::Unauthorized("invalid token subject".into()))?;
 
-    let quiz_exists: Option<Uuid> =
-        sqlx::query_scalar("SELECT id FROM quizzes WHERE id = $1")
-            .bind(quiz_id)
-            .fetch_optional(&state.db)
-            .await?;
+    let quiz_exists: Option<Uuid> = sqlx::query_scalar("SELECT id FROM quizzes WHERE id = $1")
+        .bind(quiz_id)
+        .fetch_optional(&state.db)
+        .await?;
     if quiz_exists.is_none() {
         return Err(AppError::NotFound("quiz not found".into()));
     }
@@ -259,7 +260,9 @@ pub async fn submit_quiz(
     .await?;
 
     if correct.is_empty() {
-        return Err(AppError::NotFound("quiz not found or has no questions".into()));
+        return Err(AppError::NotFound(
+            "quiz not found or has no questions".into(),
+        ));
     }
 
     let total = correct.len() as i32;

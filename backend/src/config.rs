@@ -12,7 +12,9 @@ pub enum ConfigError {
     #[error("JWT_SECRET is too short ({0} chars, need >= 32). Generate one with: openssl rand -base64 48")]
     WeakJwtSecret(usize),
 
-    #[error("invalid CORS origin {0:?} (expected scheme://host[:port], e.g. http://localhost:5173)")]
+    #[error(
+        "invalid CORS origin {0:?} (expected scheme://host[:port], e.g. http://localhost:5173)"
+    )]
     InvalidCorsOrigin(String),
 }
 
@@ -99,4 +101,3 @@ impl Config {
         })
     }
 }
-
