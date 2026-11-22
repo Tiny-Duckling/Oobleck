@@ -92,14 +92,14 @@ pub struct GenerateResponse {
 pub async fn list_quizzes(State(state): State<AppState>) -> AppResult<Json<Vec<QuizSummary>>> {
     let quizzes = sqlx::query_as::<_, QuizSummary>(
         r#"
-        SELECT q.id, q.title, q.description, COUNT(DISTINCT qs.id)::bigint AS question_count,
+        SELECT q.id, q.title, q.description, q.total_questions::bigint AS question_count,
                COALESCE(ARRAY_AGG(DISTINCT s.name) FILTER (WHERE s.name IS NOT NULL),
                         ARRAY[]::text[]) AS subjects
         FROM quizzes q
         LEFT JOIN questions qs ON qs.quiz_id = q.id
         LEFT JOIN subjects s ON s.id = qs.subject_id
         WHERE NOT q.is_generated
-        GROUP BY q.id, q.title, q.description
+        GROUP BY q.id, q.title, q.description, q.total_questions
         ORDER BY q.created_at
         "#,
     )
@@ -238,19 +238,28 @@ pub async fn submit_quiz(
     let user_id = Uuid::parse_str(&user_id)
         .map_err(|_| AppError::Unauthorized("invalid token subject".into()))?;
 
+    let (expected_questions,): (i32,) = sqlx::query_as(
+        "SELECT total_questions FROM quizzes WHERE id = $1",
+    )
+    .bind(quiz_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("quiz not found".into()))?;
+
+    if expected_questions == 0 {
+        return Err(AppError::NotFound(
+            "quiz not found or has no questions".into(),
+        ));
+    }
+
     // Load correct answers for this quiz (question_id -> correct option_id).
-    // LATERAL + LIMIT 1 keeps exactly one row per question even if bad data
-    // marks multiple options correct; attempt_answers is unique per question.
+    // The partial unique index idx_options_one_correct guarantees at most one
+    // row per question.
     let correct: Vec<(Uuid, Uuid)> = sqlx::query_as(
         r#"
         SELECT qs.id, o.id
         FROM questions qs
-        JOIN LATERAL (
-            SELECT id FROM options
-            WHERE question_id = qs.id AND is_correct
-            ORDER BY position
-            LIMIT 1
-        ) o ON true
+        JOIN options o ON o.question_id = qs.id AND o.is_correct
         WHERE qs.quiz_id = $1
         ORDER BY qs.position
         "#,
@@ -259,13 +268,13 @@ pub async fn submit_quiz(
     .fetch_all(&state.db)
     .await?;
 
-    if correct.is_empty() {
-        return Err(AppError::NotFound(
-            "quiz not found or has no questions".into(),
+    if correct.len() as i32 != expected_questions {
+        return Err(AppError::Internal(
+            "quiz has one or more questions without a correct answer".into(),
         ));
     }
 
-    let total = correct.len() as i32;
+    let total = expected_questions;
     let mut results = Vec::with_capacity(correct.len());
 
     for (question_id, correct_option_id) in &correct {
@@ -337,13 +346,12 @@ pub async fn submit_quiz(
             let updated = sqlx::query(
                 r#"
                 UPDATE attempts
-                SET score = $2, total_questions = $3, submitted_at = now()
+                SET score = $2, submitted_at = now()
                 WHERE id = $1 AND submitted_at IS NULL
                 "#,
             )
             .bind(id)
             .bind(score)
-            .bind(total)
             .execute(&mut *tx)
             .await?;
             if updated.rows_affected() == 0 {
@@ -354,15 +362,14 @@ pub async fn submit_quiz(
         None => {
             sqlx::query_scalar(
                 r#"
-                INSERT INTO attempts (user_id, quiz_id, score, total_questions, submitted_at)
-                VALUES ($1, $2, $3, $4, now())
+                INSERT INTO attempts (user_id, quiz_id, score, submitted_at)
+                VALUES ($1, $2, $3, now())
                 RETURNING id
                 "#,
             )
             .bind(user_id)
             .bind(quiz_id)
             .bind(score)
-            .bind(total)
             .fetch_one(&mut *tx)
             .await?
         }
@@ -429,10 +436,11 @@ pub async fn generate_quiz(
     let mut tx = state.db.begin().await?;
 
     let quiz_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO quizzes (title, description, is_generated) VALUES ($1, $2, true) RETURNING id",
+        "INSERT INTO quizzes (title, description, is_generated, total_questions) VALUES ($1, $2, true, $3) RETURNING id",
     )
     .bind(&title)
     .bind(&description)
+    .bind(n as i32)
     .fetch_one(&mut *tx)
     .await?;
 

@@ -14,7 +14,7 @@ pub struct AttemptDto {
     pub quiz_id: Uuid,
     pub quiz_title: String,
     pub score: Option<i32>,
-    pub total_questions: Option<i32>,
+    pub total_questions: i32,
     pub started_at: DateTime<Utc>,
     pub submitted_at: Option<DateTime<Utc>>,
 }
@@ -42,7 +42,7 @@ pub struct AttemptDetailDto {
     pub quiz_title: String,
     /// `None` while the attempt has not been submitted.
     pub score: Option<i32>,
-    pub total_questions: Option<i32>,
+    pub total_questions: i32,
     /// `None` while the attempt has not been submitted.
     pub submitted_at: Option<DateTime<Utc>>,
     pub started_at: DateTime<Utc>,
@@ -58,7 +58,7 @@ pub async fn my_history(
 
     let history = sqlx::query_as::<_, AttemptDto>(
         r#"
-        SELECT a.id, a.quiz_id, q.title AS quiz_title, a.score, a.total_questions,
+        SELECT a.id, a.quiz_id, q.title AS quiz_title, a.score, q.total_questions,
                a.submitted_at, a.started_at
         FROM attempts a
         JOIN quizzes q ON q.id = a.quiz_id
@@ -91,13 +91,13 @@ pub async fn get_attempt(
             Uuid,
             String,
             Option<i32>,
-            Option<i32>,
+            i32,
             Option<DateTime<Utc>>,
             DateTime<Utc>,
         ),
     >(
         r#"
-            SELECT a.quiz_id, q.title, a.score, a.total_questions, a.submitted_at, a.started_at
+            SELECT a.quiz_id, q.title, a.score, q.total_questions, a.submitted_at, a.started_at
             FROM attempts a
             JOIN quizzes q ON q.id = a.quiz_id
             WHERE a.id = $1 AND a.user_id = $2
@@ -118,12 +118,7 @@ pub async fn get_attempt(
         FROM attempt_answers aa
         JOIN questions qs ON qs.id = aa.question_id
         LEFT JOIN options sel ON sel.id = aa.selected_option_id
-        JOIN LATERAL (
-            SELECT id, text FROM options
-            WHERE question_id = aa.question_id AND is_correct
-            ORDER BY position
-            LIMIT 1
-        ) o ON true
+        JOIN options o ON o.question_id = aa.question_id AND o.is_correct
         WHERE aa.attempt_id = $1
         ORDER BY qs.position
         "#,
