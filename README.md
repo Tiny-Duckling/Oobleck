@@ -36,7 +36,9 @@ frontend/          SvelteKit app (Svelte 5, TypeScript)
   src/lib/auth.svelte.ts  auth store (runes, persisted to localStorage)
   src/routes/       pages: home, login, register, quiz/[id], history, attempts/[id]
 docs/              Architecture and planning documentation
-  postgresql-features.md  PostgreSQL-specific features & patterns used
+  postgresql-features.md     PostgreSQL-specific features & patterns used
+  seaquery-adoption-plan.md  Pre-adoption roadmap & prerequisites for SeaQuery
+  ci-cd-plan.md              CI/CD pipeline specification & deployment flow
 ```
 
 ## API

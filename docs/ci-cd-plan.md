@@ -23,9 +23,9 @@ What the pipeline has to work with:
 
 ### Goals
 
-1. Every commit on a `release-*` or `master` branch is gated by formatting, linting, tests, type-checking, builds, dependency audits, and image builds.
+1. Every commit on a `release-*` or default branch (`$CI_DEFAULT_BRANCH`) is gated by formatting, linting, tests, type-checking, builds, dependency audits, and image builds.
 2. Direct push to any `release-*` branch (e.g. `release-v1.0.0`, `release-2026.11`) automatically builds an immutable container image and deploys to the **Pre-Production** server for verification and testing—no PR required.
-3. Merging a `release-*` branch into `master` automatically promotes the verified image and deploys to the **Production** server with a pre-flight DB backup, health verification, and rollback capability.
+3. Merging a `release-*` branch into `$CI_DEFAULT_BRANCH` automatically promotes the verified image and deploys to the **Production** server with a pre-flight DB backup, health verification, and rollback capability.
 4. "Build Once, Promote Everywhere": Production deploys the exact immutable image SHA verified on pre-production—never rebuilds from source.
 5. No secret is ever committed, baked into an image, or printed in a job log.
 6. Warm pipeline under ~10 minutes.
@@ -45,7 +45,7 @@ What the pipeline has to work with:
                                                                                     [ Release Verified ]
                                                                                              │
                                                                                              ▼
-[ Merge release-* to master ] ────────────────────────────────► promote :sha ──► deploy production (auto)
+[ Merge release-* to default branch ] ────────────────────────► promote :sha ──► deploy production (auto)
                                                                                     │
                                                                                     ├─► DB backup
                                                                                     ├─► smoke test
@@ -66,13 +66,13 @@ SERVERS
 
 ### 4.1 Workflow rules
 
-Create pipelines for pushes to release branches (`release-*`), commits on `master`, and release tags. No PR/MR is required to deploy to pre-production.
+Create pipelines for pushes to release branches (`release-*`), commits on `$CI_DEFAULT_BRANCH`, and release tags. No PR/MR is required to deploy to pre-production.
 
 ```yaml
 workflow:
   rules:
     - if: $CI_COMMIT_BRANCH =~ /^release-.*$/
-    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
 ```
 
@@ -97,8 +97,8 @@ workflow:
 | build | `compose-smoke` | Start ephemeral stack, hit `/api/health` | all pipelines |
 | deploy | `deploy-preproduction` | Deploy image to Pre-Production (Staging) | Push to `release-*` |
 | deploy | `smoke-preproduction` | Poll staging `/api/health` + e2e check | Push to `release-*` |
-| deploy | `deploy-production` | Deploy verified image to Production | Merge to `master` / tag |
-| deploy | `smoke-production` | Poll prod `/api/health`, rollback on fail | Merge to `master` / tag |
+| deploy | `deploy-production` | Deploy verified image to Production | Merge to `$CI_DEFAULT_BRANCH` / tag |
+| deploy | `smoke-production` | Poll prod `/api/health`, rollback on fail | Merge to `$CI_DEFAULT_BRANCH` / tag |
 | deploy | `rollback-production` | Manual emergency redeploy of `.last_good_tag` | Manual button |
 
 Notes:
@@ -229,9 +229,9 @@ Staging uses the same scripts with a separate directory, `COMPOSE_PROJECT_NAME=o
 5. `smoke-preproduction` runs automated end-to-end checks against the live pre-production URL.
 6. The team performs QA / acceptance testing against the live pre-production server.
 
-#### Phase B: Production Deployment (On Merge of `release-*` to `master`)
+#### Phase B: Production Deployment (On Merge of `release-*` to `$CI_DEFAULT_BRANCH`)
 
-1. The verified `release-*` branch is merged into `master`.
+1. The verified `release-*` branch is merged into `$CI_DEFAULT_BRANCH`.
 2. The pipeline skips rebuilding source code, promoting the existing `:sha-$CI_COMMIT_SHA` image verified on pre-production.
 3. `deploy-production` SSHes to the Production host (`/opt/oobleck`):
    - Takes a pre-deploy `pg_dump` backup before any container changes:
@@ -348,11 +348,11 @@ Rules:
 ### Phase 5 — Production CD (1 day)
 
 - Provision production VPS: Docker + Compose, deploy user, firewall, Caddy, DNS.
-- Add `deploy-production` (automatic on merge of `release-*` into `master` or semver tag) with pre-deploy database backup.
+- Add `deploy-production` (automatic on merge of `release-*` into `$CI_DEFAULT_BRANCH` or semver tag) with pre-deploy database backup.
 - Add `rollback-production` with automated failure trigger and manual fallback.
 - Run a rollback drill.
 
-**Exit:** merging a `release-*` branch into `master` promotes the verified `:sha` image directly to production with zero image rebuild; rollback restores the previous tag in under five minutes.
+**Exit:** merging a `release-*` branch into `$CI_DEFAULT_BRANCH` promotes the verified `:sha` image directly to production with zero image rebuild; rollback restores the previous tag in under five minutes.
 
 ### Phase 6 — Hardening (ongoing)
 
@@ -367,7 +367,7 @@ Rules:
 
 - [ ] Every push to a `release-*` branch builds an immutable `:sha` image and deploys to the Pre-Production server automatically.
 - [ ] Pre-production deployment executes database migrations and passes automated smoke checks without a PR.
-- [ ] Merging a `release-*` branch into `master` promotes the verified `:sha` image and deploys to Production automatically without rebuilding.
+- [ ] Merging a `release-*` branch into `$CI_DEFAULT_BRANCH` promotes the verified `:sha` image and deploys to Production automatically without rebuilding.
 - [ ] A pre-deploy database backup is captured before any production container update.
 - [ ] Rollback to the previous image completes automatically if production smoke tests fail, or in under five minutes via manual trigger.
 - [ ] Secret Detection is green; no real secret exists in git history or job logs.
@@ -423,7 +423,7 @@ docker-compose.yml              # parameterized images, healthchecks, conditions
 workflow:
   rules:
     - if: $CI_COMMIT_BRANCH =~ /^release-.*$/
-    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
 
 stages: [validate, test, security, build, deploy]
@@ -568,7 +568,7 @@ deploy:production:
     url: https://quiz.example.com
   resource_group: production
   rules:
-    - if: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
   needs: [build:backend, build:frontend]
   script:
